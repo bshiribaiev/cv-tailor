@@ -93,16 +93,14 @@ function init() {
     });
   });
 
-  // Listen for progress updates
-  chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === "TAILORING_PROGRESS") {
-      const bar = document.getElementById("cv-tailor-progress");
-      const pct = document.getElementById("cv-tailor-pct");
-      if (bar) bar.style.width = `${message.payload.pct}%`;
-      if (pct) pct.textContent = `${message.payload.stage} ${message.payload.pct}%`;
-    }
-    if (message.type === "TAILORING_COMPLETE") {
-      const isPdf = !!message.payload.pdfBase64;
+  // Listen for state changes via chrome.storage (reliable for content scripts)
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "session" || !changes.tailoring_state) return;
+    const state = changes.tailoring_state.newValue;
+    if (!state) return;
+
+    if (state.pdfBase64 || state.texBase64) {
+      const isPdf = !!state.pdfBase64;
       const hint = isPdf ? "" : `<p style="margin:0 0 6px 0;font-size:11px;color:#666">Compile .tex in Overleaf for PDF</p>`;
       status.innerHTML = `
         <p style="margin:0 0 8px 0;color:#16a34a;font-weight:600">Resume tailored!</p>
@@ -118,17 +116,17 @@ function init() {
       `;
       document.getElementById("cv-tailor-download")?.addEventListener("click", () => {
         let blob: Blob;
-        if (message.payload.pdfBase64) {
-          const bytes = Uint8Array.from(atob(message.payload.pdfBase64), (c) => c.charCodeAt(0));
+        if (state.pdfBase64) {
+          const bytes = Uint8Array.from(atob(state.pdfBase64), (c) => c.charCodeAt(0));
           blob = new Blob([bytes], { type: "application/pdf" });
         } else {
-          const content = decodeURIComponent(escape(atob(message.payload.texBase64!)));
+          const content = decodeURIComponent(escape(atob(state.texBase64!)));
           blob = new Blob([content], { type: "text/plain" });
         }
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = message.payload.filename;
+        a.download = state.filename || "Resume_Tailored.pdf";
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -136,16 +134,20 @@ function init() {
         status.style.display = "none";
         btn.style.display = "flex";
       });
-    }
-    if (message.type === "TAILORING_ERROR") {
+    } else if (state.error) {
       status.innerHTML = `
-        <p style="margin:0;color:#dc2626">${message.payload.error}</p>
+        <p style="margin:0;color:#dc2626">${state.error}</p>
         <button id="cv-tailor-retry2" style="margin-top:8px;padding:6px 12px;background:#e5e7eb;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Try Again</button>
       `;
       document.getElementById("cv-tailor-retry2")?.addEventListener("click", () => {
         status.style.display = "none";
         btn.style.display = "flex";
       });
+    } else {
+      const bar = document.getElementById("cv-tailor-progress");
+      const pct = document.getElementById("cv-tailor-pct");
+      if (bar) bar.style.width = `${state.pct}%`;
+      if (pct) pct.textContent = `${state.stage} ${state.pct}%`;
     }
   });
 }

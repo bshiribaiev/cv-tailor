@@ -5,7 +5,8 @@ import {
   saveTailoringState,
   clearTailoringState,
 } from "../shared/storage";
-import { tailorBullets, testApiKey } from "./gemini";
+import { tailorBullets, tailorSkills, testApiKey } from "./gemini";
+import type { TailoredSkills } from "./gemini";
 
 const ALWAYS_INCLUDE_SKILLS = [
   "Python",
@@ -90,6 +91,33 @@ function replaceBulletsInTex(
   );
 }
 
+/** Replace skill items in raw .tex within SKILLS section */
+function replaceSkillsInTex(
+  rawTex: string,
+  tailoredSkills: TailoredSkills[],
+): string {
+  const skillsStart = rawTex.indexOf("\\section{SKILLS}");
+  if (skillsStart === -1) return rawTex;
+
+  const endDoc = rawTex.indexOf("\\end{document}", skillsStart);
+  const skillsEnd = endDoc !== -1 ? endDoc : rawTex.length;
+
+  let section = rawTex.substring(skillsStart, skillsEnd);
+
+  for (const skill of tailoredSkills) {
+    // Match \textbf{<label>:} <items> by first word of label
+    const firstWord = skill.label
+      .split(/[\s/]+/)[0]
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(
+      `(\\\\textbf\\{[^}]*${firstWord}[^}]*:\\})\\s*(.+)`,
+    );
+    section = section.replace(regex, `$1 ${texEscape(skill.tailoredItems)}`);
+  }
+
+  return rawTex.substring(0, skillsStart) + section + rawTex.substring(skillsEnd);
+}
+
 /** Try to compile .tex to PDF via online LaTeX service */
 async function compileTex(tex: string): Promise<ArrayBuffer | null> {
   const controller = new AbortController();
@@ -165,16 +193,46 @@ async function handleTailoring(jobDescription: string) {
       ALWAYS_INCLUDE_SKILLS,
     );
 
+    // Post-process: trim bullets in the danger zone (89-170 chars)
+    for (const b of tailoredBullets) {
+      const len = b.tailoredText.length;
+      if (len > 88 && len < 175) {
+        // Trim to last word boundary at or before 88 chars
+        const trimmed = b.tailoredText.substring(0, 88);
+        const lastSpace = trimmed.lastIndexOf(" ");
+        if (lastSpace > 60) {
+          b.tailoredText = trimmed.substring(0, lastSpace);
+        }
+        console.log(
+          `[CV Tailor] Trimmed bullet ${b.id}: ${len} → ${b.tailoredText.length} chars`,
+        );
+      }
+    }
+
     const tailoredMap = new Map(
       tailoredBullets.map((b) => [b.id, b.tailoredText]),
     );
 
-    await progress("Updating resume...", 60);
+    await progress("Updating resume...", 55);
 
-    const modifiedTex = replaceBulletsInTex(rawTex, expBullets, tailoredMap);
+    let modifiedTex = replaceBulletsInTex(rawTex, expBullets, tailoredMap);
+
+    // Tailor skills: add missing JD skills + reorder
+    const skillsSection = resume.sections.find((s) => s.type === "skills");
+    if (skillsSection?.entries[0]?.skillLines) {
+      await progress("Tailoring skills...", 65);
+      const tailoredSkills = await tailorSkills(
+        apiKey,
+        jobDescription,
+        skillsSection.entries[0].skillLines,
+        ALWAYS_INCLUDE_SKILLS,
+      );
+      modifiedTex = replaceSkillsInTex(modifiedTex, tailoredSkills);
+    }
+
     const baseName = resume.name.replace(/\s+/g, "_");
 
-    await progress("Compiling PDF...", 75);
+    await progress("Compiling PDF...", 80);
 
     const pdfBuffer = await compileTex(modifiedTex);
 

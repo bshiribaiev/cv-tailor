@@ -35,13 +35,14 @@ RULES:
 - Maintain professional tone
 - These skills should always be mentioned somewhere if relevant: ${alwaysIncludeSkills.join(", ")}
 
-LENGTH RULES (critical for PDF formatting — one line is ~95 characters):
-- Each bullet must be EITHER ≤95 characters (one line) OR 170-200 characters (two full lines)
-- NEVER output bullets between 96-165 characters — this causes ugly wrapping with 1-2 dangling words on a second line
-- If the original bullet is ≤95 chars, the tailored version MUST also be ≤95 chars
-- If the original is >165 chars, aim for 170-200 chars (two clean lines)
-- When in doubt, make it shorter. Concise is better than wordy
-- Total length across all bullets should be similar to or less than the original total
+LENGTH RULES (critical for PDF formatting — one printed line is ~88 characters):
+- Each bullet must be EITHER ≤88 characters (one line) OR 175-200 characters (two full lines)
+- NEVER output bullets between 89-170 characters — this causes ugly wrapping with 1-2 dangling words
+- If the original bullet is ≤88 chars, the tailored version MUST also be ≤88 chars
+- If the original is >170 chars, aim for 175-200 chars (two clean lines)
+- When in doubt, make it SHORTER. Concise and punchy is always better
+- Total length across all bullets should be similar to or LESS than the original total
+- Count your characters carefully for each bullet before returning
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -61,14 +62,15 @@ export async function tailorSkills(
   skillLines: { label: string; items: string }[],
   alwaysIncludeSkills: string[],
 ): Promise<TailoredSkills[]> {
-  const prompt = `You are a resume tailoring assistant. Given a job description and skill categories from a resume, reorder the skills within each category to prioritize skills most relevant to the job description.
+  const prompt = `You are a resume tailoring assistant. Given a job description and skill categories from a resume, update the skills to better match the job.
 
 RULES:
-- Do NOT add skills that aren't already listed
-- Do NOT remove any skills
-- Only reorder within each category — put most relevant skills first
+- Reorder skills within each category — put most relevant to the job first
+- If the job requires a language, framework, or tool that fits a category but ISN'T listed, ADD it (max 2 new skills per category)
+- Do NOT remove any existing skills
 - These skills must always appear: ${alwaysIncludeSkills.join(", ")}
-- Keep the same format: comma-separated list
+- Keep comma-separated format
+- Keep each category to one line (~80 chars max for the items)
 
 JOB DESCRIPTION:
 ${jobDescription}
