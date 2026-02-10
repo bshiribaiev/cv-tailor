@@ -1,0 +1,372 @@
+\documentclass[11pt]{article}
+
+% Packages:
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+
+\usepackage[
+    ignoreheadfoot, % set margins without considering header and footer
+    top=1 cm, % seperation between body and page edge from the top
+    bottom=0.5 cm, % seperation between body and page edge from the bottom
+    left=1.2 cm, % seperation between body and page edge from the left
+    right=1.2 cm, % seperation between body and page edge from the right
+]{geometry} % for adjusting page geometry
+
+\usepackage{titlesec} % for customizing section titles
+\usepackage{tabularx} % for making tables with fixed width columns
+\usepackage{array} % tabularx requires this
+\usepackage[dvipsnames]{xcolor} % for coloring text
+\definecolor{primaryColor}{RGB}{0, 79, 144} % define primary color
+\usepackage{enumitem} % for customizing lists
+\usepackage{amsmath} % for math
+
+\usepackage[normalem]{ulem}  % provides \uline
+\usepackage[
+  pdftitle={Bekbol_Shiribaiev_Resume},
+  pdfauthor={Bekbol Shiribaiev},
+  pdfcreator={LaTeX with RenderCV},
+  colorlinks=true,
+  urlcolor=black            % black link text
+]{hyperref}
+
+% Make ALL \href{...}{text} show as black + underlined text
+\let\OldHref\href
+\renewcommand{\href}[2]{\OldHref{#1}{\uline{#2}}}
+
+% If you still use \hrefWithoutArrow in the body, alias it to \href
+\let\hrefWithoutArrow\href
+
+\usepackage[pscoord]{eso-pic} % for floating text on the page
+\usepackage{calc} % for calculating lengths
+\usepackage{bookmark} % for bookmarks
+\usepackage{lastpage} % for getting the total number of pages
+\usepackage{changepage} % for one column entries (adjustwidth environment)
+\usepackage{paracol} % for two and three column entries
+\usepackage{ifthen} % for conditional statements
+\usepackage{needspace} % for avoiding page brake right after the section title
+\usepackage{iftex} % check if engine is pdflatex, xetex or luatex
+
+% Ensure that generate pdf is machine readable/ATS parsable:
+\ifPDFTeX
+    \input{glyphtounicode}
+    \pdfgentounicode=1
+    % \usepackage[T1]{fontenc} % this breaks sb2nov
+    \usepackage[utf8]{inputenc}
+    \usepackage{lmodern}
+\fi
+
+% Some settings:
+\AtBeginEnvironment{adjustwidth}{\partopsep0pt} % rmv space before adjustwidth env
+\pagestyle{empty} % no header or footer
+\setcounter{secnumdepth}{0} % no section numbering
+\setlength{\parindent}{0pt} % no indentation
+\setlength{\parskip}{0pt}
+
+\setlength{\topskip}{0pt} % no top skip
+\setlength{\columnsep}{0.3cm} % set column seperation
+\makeatletter
+
+\titleformat{\section}{\needspace{3\baselineskip}\large}{}{0pt}{}[\vspace{1pt}\titlerule]
+
+% section title spacing
+\titlespacing{\section}{
+    % left space:
+    0 pt
+}{
+    % top space:
+    0.3 cm
+}{
+    % bottom space:
+    0.2 cm
+} 
+
+% new environment for highlights
+\renewcommand{\labelitemi}{$\bullet$} % custom bullet points
+\newenvironment{highlights}{
+    \begin{itemize}[
+        topsep=0.0 cm,
+        parsep=0 cm,
+        partopsep=0 pt,
+        itemsep=0.1 cm,
+        leftmargin=0.4 cm
+    ]
+}{
+    \end{itemize}
+} 
+
+\renewcommand{\labelitemi}{$\bullet$} % custom bullet points
+\newenvironment{highlightss}{
+    \begin{itemize}[
+        topsep=0.0 cm,
+        parsep=0 cm,
+        partopsep=0 pt,
+        itemsep=0.1 cm,
+        leftmargin=0.4 cm
+    ]
+}{
+    \end{itemize}
+} 
+
+% new environment for highlights for bullet entries
+\newenvironment{highlightsforbulletentries}{
+    \begin{itemize}[
+        topsep=0.0 cm,
+        parsep=0 cm,
+        partopsep=0pt,
+        itemsep=0pt,
+        leftmargin=10pt
+    ]
+}{
+    \end{itemize}
+} 
+
+\newenvironment{onecolentry}{
+    \begin{adjustwidth}{
+        0.01 cm + 0.01 cm
+    }{
+        0.01 cm + 0.01 cm
+    }
+}{
+    \end{adjustwidth}
+} % new environment for one column entries
+
+\newenvironment{twocolentry}[2][]{
+    \onecolentry
+    \def\secondColumn{#2}
+    \setcolumnwidth{\fill, 6.8 cm}
+    \begin{paracol}{2}
+    \hyphenpenalty=10000
+}{
+    \switchcolumn \raggedleft \secondColumn
+    \end{paracol}
+    \endonecolentry
+} % new environment for two column entries
+
+% new environment for the header
+\newenvironment{header}{
+    \setlength{\topsep}{0pt}\par\kern\topsep\centering\linespread{1.0}
+}{
+    \par\kern\topsep
+}
+
+% save the original href command in a new command:
+\let\hrefWithoutArrow\href
+
+% new command for external links:
+\renewcommand{\href}[2]{\hrefWithoutArrow{#1}{\ifthenelse{\equal{#2}{}}{ }{#2 }\raisebox{.15ex}{\footnotesize \faExternalLink*}}}
+
+
+\begin{document}
+    \newcommand{\AND}{\unskip
+        \cleaders\copy\ANDbox\hskip\wd\ANDbox
+        \ignorespaces
+    }
+    \newsavebox\ANDbox
+    \sbox\ANDbox{}
+
+    \begin{header}
+        \textbf{\fontsize{18 pt}{18 pt}\selectfont Bekbol Shiribaiev}
+
+        \vspace{0.1 cm}
+
+        \normalsize
+        % Include location later if needed
+        % \mbox{\hspace*{0.13cm}New York, NY} \\%
+        % \vspace{0.1 cm}
+        % \AND%
+        % \kern 0.25 cm%
+        
+        \mbox{\hrefWithoutArrow{mailto:bekbolnyc@gmail.com}{\color{black}bekbolnyc@gmail.com}}%
+        \kern 0.25 cm%
+        \AND%
+        \kern 0.25 cm
+        \mbox{\hrefWithoutArrow{https://linkedin.com/in/shiribaiev}{\color{black}linkedin.com/in/shiribaiev}}%
+        \kern 0.25 cm%
+        \AND%
+        \kern 0.25 cm%
+        \mbox{\hrefWithoutArrow{https://github.com/bshiribaiev}{\color{black}github.com/bshiribaiev}}%
+        \kern 0.25 cm%
+        \AND%
+        \kern 0.25 cm%
+        \mbox{\hrefWithoutArrow{https://bekbolsh.com/}{\color{black}bekbolsh.com}}%
+    \end{header}
+        
+        % Include phone number later if needed
+        % \kern 0.25 cm%
+        % \AND%
+        % \kern 0.25 cm%
+        % \mbox{\hrefWithoutArrow{tel:+90-541-999-99-99}%{\color{black}{\footnotesize\faPhone*}\hspace*{0.13cm}0541 %999 99 99}}%
+        
+    \vspace{0 cm}
+
+    \section{EDUCATION}
+        \begin{twocolentry}
+        {New York, NY}
+            \textbf{The City College of New York - CUNY}
+        \end{twocolentry}
+
+        \begin{twocolentry}{Expected May 2027}
+            {Bachelor of Science in Computer Science \& Economics} 
+        \end{twocolentry}
+        \vspace{0.1 cm}
+        \begin{onecolentry}
+            \begin{highlightss}
+                \item \textbf{Coursework:} Data Structures, Algorithms, Software Engineering, Computer Organization, Operating Systems 
+                \item \textbf{Hackathon wins:} Stony Brook University Hacks 2025, Wellesley Hacks 2025, CUNY Tech Hacks 2025
+                \item \textbf{Activities:} MIT - CCNY AI \& Entrepreneurship Fellow, Colin Powell Fellow in Leadership and Public Service 
+            \end{highlightss}
+        \end{onecolentry}
+        
+    \section{EXPERIENCE}
+        \begin{twocolentry}{
+        {Aug 2025 – Present}    
+            
+        New York, NY}
+            \textbf{Software Engineer Intern} \\
+            Stella Rising
+        \end{twocolentry}
+
+        \vspace{0.1 cm}
+        
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Automated earnings-call transcript search by building a Selenium scraper with Gemini API for analysis, deployed on Google Cloud Run with AWS SES for weekly emails - saving 10 hours of sales research time per week
+                
+                \item Developed a QA system to validate Salesforce data with Pandas, AWS S3, improving data accuracy by 30\%
+                
+                \item Engineered SEO reporting pipeline to fetch data from Google Search Console, Semrush, and Looker Studio APIs, generates PowerPoint slides with python-pptx, and generates analysis with Gemini, saving \$80,000 per year
+
+            \end{highlights}
+        \end{onecolentry}
+        \vspace{0.3 cm}
+        
+        \begin{twocolentry}{
+        {Feb 2025 – May 2025}    
+            
+        New York, NY}
+            \textbf{Software Engineer Intern}
+            
+            Evergreen Investments
+        \end{twocolentry}
+
+        \vspace{0.10 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Built an agent-messaging backend with Express.js/PostgreSQL, that increased lead conversion by \textbf{30\%}
+
+                \item Deployed a Java Spring Boot microservice for agent messaging, horizontally scalable behind a load balancer, reducing API latency from 300ms to 100ms and improving reliability under growing traffic
+                
+                \item Implemented a responsive property-search UI in React/TypeScript with optimized rendering and search filters
+            \end{highlights}
+        \end{onecolentry}
+
+        \vspace{0.1 cm}
+        
+    \section{PROJECTS}
+
+    \begin{twocolentry}{
+        \hrefWithoutArrow{https://github.com/bshiribaiev/cbmeetings}{\color{black}Github}
+        \textnormal{|} \textit{
+        \hrefWithoutArrow{https://cbmeetings.vercel.app/}{\color{black}cbmeetings.vercel.app}
+      }
+    }
+      \textbf{AI Video Summarizer} {\textbar{} \textit{Python, FastAPI, FFmpeg, Whisper, Gemini}}
+    \end{twocolentry}
+
+        \vspace{0.1 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+
+                \item Deployed an AI-powered app that turns 2-hour NYC community board meeting videos into 5-minute briefs
+                \item Built a FastAPI, FFmpeg pipeline with Whisper transcription, SQLite storage, and Gemini for analysis, reducing processing time by 2 hours through asynchronous processing
+                \item Integrated Bright Data proxy routing, enabling 99\% reliability to fetch YouTube videos in cloud environment
+            \end{highlights}
+        \end{onecolentry}
+        \vspace{0.4 cm}
+
+        \begin{twocolentry} {
+        \hrefWithoutArrow{https://github.com/bshiribaiev/promptly}
+        {\color{black}Github}
+        \textnormal{|} \textit{
+        \hrefWithoutArrow{https://promptly-eight-zeta.vercel.app/}
+        {\color{black}promptly-eight-zeta.vercel.app} 
+        }
+        }
+        \textbf{Prompt Engineering Tool} {\textbar{} \textit{Java Spring Boot, Tauri, Rust}}
+        \end{twocolentry}
+        
+        \vspace{0.1 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+                \item Engineered a voice-enabled system using Java Spring Boot to transform vague ideas into precise AI prompts
+
+                \item Developed a Next.js UI and Tauri desktop app enabling users to upload PDF/DOCX files and generate prompts
+                
+                \item Implemented a reactive WebFlux API with WebSocket streaming for real-time speech-to-text conversion
+            \end{highlights}
+        \end{onecolentry}
+        \vspace{0.4 cm}
+    \begin{twocolentry}{
+        \hrefWithoutArrow{https://github.com/bshiribaiev/pentamind}{\color{black}Github}
+      }
+    }
+      \textbf{Multi-Model LLM Router} {\textbar{} \textit{Python, LangGraph, Tauri}}
+    \end{twocolentry}
+
+        \vspace{0.1 cm}
+        \begin{onecolentry}
+            \begin{highlights}
+
+                \item Designed a desktop overlay using Tauri and LangGraph for intelligent AI model routing across 5 models
+                \item Implemented task classification system that analyzes user queries and automatically chooses optimal models
+                \item Achieved 30\% faster responses and 25\% cost reduction with LangGraph decision graphs for LLM selection
+            \end{highlights}
+        \end{onecolentry}
+        
+    \vspace{0.1 cm}
+            
+    \section{SKILLS}    
+        \begin{onecolentry}
+            \textbf{Languages:} Python, TypeScript, C++, Java, SQL, HTML, CSS
+        \end{onecolentry}
+        \vspace{0.1 cm}
+
+        \begin{onecolentry}
+            \textbf{Frameworks \& Libraries:} Spring Boot, Node.js, Express.js, Next.js, React Native
+        \end{onecolentry}
+        \vspace{0.1 cm}
+        
+        \begin{onecolentry}
+            \textbf{AI/ML:} LangGraph, PyTorch, scikit-learn, TensorFlow, NumPy, Pandas 
+        \end{onecolentry}
+        \vspace{0.1 cm}
+        
+        \begin{onecolentry}
+            \textbf{DevOps \& Infra:} Git, AWS, Docker, Google Cloud, PostgreSQL 
+        \end{onecolentry}
+\end{document}
+
+% Include if you will work on research
+    % \section{Publications}
+        
+    %     \begin{samepage}
+    %         \begin{twocolentry}{
+    %             Jan 2004
+    %         }
+    %             \textbf{3D Finite Element Analysis of No-Insulation Coils}
+
+    %             \vspace{0.10 cm}
+
+    %             \mbox{Frodo Baggins}, \mbox{\textbf{\textit{John Doe}}}, \mbox{Samwise Gamgee}
+    %         \end{twocolentry}
+
+
+    %         \vspace{0.10 cm}
+
+    %         \begin{onecolentry}
+    %     \href{https://doi.org/10.1109/TASC.2023.3340648}{10.1109/TASC.2023.3340648}
+    %         \end{onecolentry}
+    %     \end{samepage}
+
+% {\textit{\href{https://github.com/bshiribaiev/betterlearn}{github.com/bshiribaiev/betterlearn}}}
