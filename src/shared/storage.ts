@@ -2,9 +2,12 @@ import type { Resume } from "../parser/types";
 
 const KEYS = {
   apiKey: "gemini_api_key",
+  model: "gemini_model",
   rawTex: "raw_tex",
   parsedResume: "parsed_resume",
 } as const;
+
+export const DEFAULT_MODEL = "gemini-2.5-flash";
 
 export async function saveApiKey(key: string): Promise<void> {
   await chrome.storage.local.set({ [KEYS.apiKey]: key });
@@ -13,6 +16,15 @@ export async function saveApiKey(key: string): Promise<void> {
 export async function getApiKey(): Promise<string | null> {
   const result = await chrome.storage.local.get(KEYS.apiKey);
   return (result[KEYS.apiKey] as string) ?? null;
+}
+
+export async function saveModel(model: string): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.model]: model });
+}
+
+export async function getModel(): Promise<string> {
+  const result = await chrome.storage.local.get(KEYS.model);
+  return (result[KEYS.model] as string) ?? DEFAULT_MODEL;
 }
 
 export async function saveResume(
@@ -44,6 +56,7 @@ export async function saveTailoringState(state: {
   stage: string;
   pct: number;
   pdfBase64?: string;
+  texBase64?: string;
   filename?: string;
   error?: string;
 }): Promise<void> {
@@ -54,6 +67,7 @@ export async function getTailoringState(): Promise<{
   stage: string;
   pct: number;
   pdfBase64?: string;
+  texBase64?: string;
   filename?: string;
   error?: string;
 } | null> {
@@ -62,6 +76,7 @@ export async function getTailoringState(): Promise<{
     stage: string;
     pct: number;
     pdfBase64?: string;
+    texBase64?: string;
     filename?: string;
     error?: string;
   }) ?? null;

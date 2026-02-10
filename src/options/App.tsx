@@ -3,10 +3,12 @@ import { parseLatex } from "../parser/latex-parser";
 import {
   saveApiKey,
   getApiKey,
+  saveModel,
+  getModel,
   saveResume,
   getResume,
+  DEFAULT_MODEL,
 } from "../shared/storage";
-import { testApiKey } from "../background/gemini";
 import type { Resume } from "../parser/types";
 
 export function App() {
@@ -14,6 +16,8 @@ export function App() {
   const [apiKeyStatus, setApiKeyStatus] = useState<
     "idle" | "testing" | "valid" | "invalid"
   >("idle");
+  const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+  const [model, setModel] = useState(DEFAULT_MODEL);
   const [texContent, setTexContent] = useState("");
   const [parsedResume, setParsedResume] = useState<Resume | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
@@ -27,6 +31,7 @@ export function App() {
         setApiKeyStatus("valid");
       }
     });
+    getModel().then(setModel);
     getResume().then((data) => {
       if (data) {
         setTexContent(data.rawTex);
@@ -38,8 +43,19 @@ export function App() {
   async function handleSaveApiKey() {
     await saveApiKey(apiKey);
     setApiKeyStatus("testing");
-    const valid = await testApiKey(apiKey);
-    setApiKeyStatus(valid ? "valid" : "invalid");
+    setApiKeyError(null);
+    // Route test through service worker (has host_permissions)
+    chrome.runtime.sendMessage(
+      { type: "TEST_API_KEY", payload: { apiKey } },
+      (res) => {
+        if (res?.valid) {
+          setApiKeyStatus("valid");
+        } else {
+          setApiKeyStatus("invalid");
+          setApiKeyError(res?.error ?? "Unknown error");
+        }
+      },
+    );
   }
 
   function handleFileUpload(e: Event) {
@@ -122,17 +138,41 @@ export function App() {
           <p class="text-sm text-green-600 mt-1">API key is valid</p>
         )}
         {apiKeyStatus === "invalid" && (
-          <p class="text-sm text-red-600 mt-1">
-            Invalid API key. Get one at{" "}
-            <a
-              href="https://aistudio.google.com/apikey"
-              target="_blank"
-              class="underline"
-            >
-              aistudio.google.com
-            </a>
-          </p>
+          <div class="text-sm text-red-600 mt-1">
+            <p>
+              API key test failed. Get one at{" "}
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                class="underline"
+              >
+                aistudio.google.com
+              </a>
+            </p>
+            {apiKeyError && (
+              <p class="text-xs text-gray-500 mt-1">Error: {apiKeyError}</p>
+            )}
+          </div>
         )}
+      </section>
+
+      {/* Model Selection */}
+      <section class="mb-8">
+        <h2 class="text-lg font-semibold mb-3">Gemini Model</h2>
+        <select
+          value={model}
+          onChange={async (e) => {
+            const val = (e.target as HTMLSelectElement).value;
+            setModel(val);
+            await saveModel(val);
+          }}
+          class="px-3 py-2 border rounded text-sm"
+        >
+          <option value="gemini-2.5-flash">Gemini 2.5 Flash (recommended)</option>
+          <option value="gemini-3-flash-preview">Gemini 3 Flash (preview)</option>
+          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (fastest)</option>
+        </select>
       </section>
 
       {/* Resume Upload */}

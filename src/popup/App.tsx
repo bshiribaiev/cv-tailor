@@ -12,7 +12,8 @@ export function App() {
   const [progress, setProgress] = useState(0);
   const [statusText, setStatusText] = useState("");
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
-  const [filename, setFilename] = useState("Resume_Tailored.pdf");
+  const [texBase64, setTexBase64] = useState<string | null>(null);
+  const [filename, setFilename] = useState("Resume_Tailored.tex");
   const [error, setError] = useState<string | null>(null);
   const [jobDescription, setJobDescription] = useState<string | null>(null);
 
@@ -28,10 +29,11 @@ export function App() {
     // Check for in-progress state
     getTailoringState().then((state) => {
       if (state) {
-        if (state.pdfBase64) {
+        if (state.pdfBase64 || state.texBase64) {
           setStage("done");
-          setPdfBase64(state.pdfBase64);
-          setFilename(state.filename ?? "Resume_Tailored.pdf");
+          setPdfBase64(state.pdfBase64 ?? null);
+          setTexBase64(state.texBase64 ?? null);
+          setFilename(state.filename ?? "Resume_Tailored.tex");
           setProgress(100);
         } else if (state.error) {
           setStage("error");
@@ -52,7 +54,8 @@ export function App() {
         setStatusText(message.payload.stage);
       } else if (message.type === "TAILORING_COMPLETE") {
         setStage("done");
-        setPdfBase64(message.payload.pdfBase64);
+        setPdfBase64(message.payload.pdfBase64 ?? null);
+        setTexBase64(message.payload.texBase64 ?? null);
         setFilename(message.payload.filename);
         setProgress(100);
       } else if (message.type === "TAILORING_ERROR") {
@@ -109,17 +112,26 @@ export function App() {
   }
 
   function handleDownload() {
-    if (!pdfBase64) return;
-    const byteChars = atob(pdfBase64);
-    const bytes = new Uint8Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) {
-      bytes[i] = byteChars.charCodeAt(i);
+    if (pdfBase64) {
+      const byteChars = atob(pdfBase64);
+      const bytes = new Uint8Array(byteChars.length);
+      for (let i = 0; i < byteChars.length; i++) {
+        bytes[i] = byteChars.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: "application/pdf" });
+      downloadBlob(blob, filename);
+    } else if (texBase64) {
+      const content = decodeURIComponent(escape(atob(texBase64)));
+      const blob = new Blob([content], { type: "text/plain" });
+      downloadBlob(blob, filename);
     }
-    const blob = new Blob([bytes], { type: "application/pdf" });
+  }
+
+  function downloadBlob(blob: Blob, name: string) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = filename;
+    a.download = name;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -128,6 +140,7 @@ export function App() {
     await clearTailoringState();
     setStage("idle");
     setPdfBase64(null);
+    setTexBase64(null);
     setError(null);
     setProgress(0);
     setStatusText("");
@@ -135,10 +148,20 @@ export function App() {
   }
 
   const isReady = hasResume && hasApiKey;
+  const isPdf = !!pdfBase64;
 
   return (
     <div class="w-[380px] p-4 bg-white text-gray-900">
-      <h1 class="text-lg font-bold mb-3">CV Tailor</h1>
+      <div class="flex justify-between items-center mb-3">
+        <h1 class="text-lg font-bold">CV Tailor</h1>
+        <button
+          class="text-gray-400 hover:text-gray-600 text-sm"
+          onClick={() => chrome.runtime.openOptionsPage()}
+          title="Settings"
+        >
+          &#9881; Settings
+        </button>
+      </div>
 
       {/* Status indicators */}
       <div class="space-y-1 mb-4 text-sm">
@@ -178,7 +201,10 @@ export function App() {
       {/* Progress */}
       {(stage === "extracting" || stage === "tailoring" || stage === "generating") && (
         <div class="space-y-2">
-          <p class="text-sm text-gray-600">{statusText}</p>
+          <div class="flex justify-between items-center">
+            <p class="text-sm text-gray-600">{statusText}</p>
+            <p class="text-sm font-medium text-gray-700">{progress}%</p>
+          </div>
           <div class="w-full bg-gray-200 rounded-full h-2">
             <div
               class="bg-blue-600 h-2 rounded-full transition-all duration-300"
@@ -192,11 +218,16 @@ export function App() {
       {stage === "done" && (
         <div class="space-y-3">
           <p class="text-sm text-green-600 font-medium">Resume tailored!</p>
+          {!isPdf && (
+            <p class="text-xs text-gray-500">
+              PDF compilation unavailable — download .tex and compile in Overleaf
+            </p>
+          )}
           <button
             class="w-full py-2 px-4 bg-green-600 text-white rounded font-medium hover:bg-green-700"
             onClick={handleDownload}
           >
-            Download PDF
+            Download {isPdf ? "PDF" : ".tex"}
           </button>
           <button
             class="w-full py-2 px-4 bg-gray-200 text-gray-700 rounded font-medium hover:bg-gray-300"

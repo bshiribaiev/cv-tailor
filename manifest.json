@@ -9,7 +9,8 @@
     "scripting"
   ],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://latex.ytotech.com/*"
   ],
   "action": {
     "default_popup": "src/popup/index.html",
@@ -23,6 +24,25 @@
     "service_worker": "src/background/service-worker.ts",
     "type": "module"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/jobs/*",
+        "https://linkedin.com/jobs/*",
+        "https://boards.greenhouse.io/*",
+        "https://job-boards.greenhouse.io/*",
+        "https://jobs.lever.co/*",
+        "https://*.myworkdayjobs.com/*",
+        "https://*.myworkday.com/*",
+        "https://careers.google.com/*",
+        "https://jobs.ashbyhq.com/*",
+        "https://*.applytojob.com/*",
+        "https://jobs.smartrecruiters.com/*"
+      ],
+      "js": ["src/content/floating-button.ts"],
+      "run_at": "document_idle"
+    }
+  ],
   "options_page": "src/options/index.html",
   "icons": {
     "16": "assets/icons/icon16.png",

@@ -6,8 +6,16 @@ export type Message =
     }
   | { type: "START_TAILORING"; payload: { jobDescription: string } }
   | { type: "TAILORING_PROGRESS"; payload: { stage: string; pct: number } }
-  | { type: "TAILORING_COMPLETE"; payload: { pdfBase64: string; filename: string } }
+  | {
+      type: "TAILORING_COMPLETE";
+      payload: {
+        pdfBase64?: string;
+        texBase64?: string;
+        filename: string;
+      };
+    }
   | { type: "TAILORING_ERROR"; payload: { error: string } }
+  | { type: "TEST_API_KEY"; payload: { apiKey: string } }
   | { type: "GET_STATUS" }
   | {
       type: "STATUS_RESULT";

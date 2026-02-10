@@ -1,3 +1,5 @@
+import { getModel } from "../shared/storage";
+
 const GEMINI_BASE =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -68,38 +70,61 @@ Return a JSON array: [{"label": "...", "tailoredItems": "..."}]`;
 }
 
 async function callGemini(apiKey: string, prompt: string): Promise<string> {
-  const model = "gemini-2.0-flash";
+  const model = await getModel();
   const url = `${GEMINI_BASE}/${model}:generateContent?key=${apiKey}`;
+  console.log(`[CV Tailor] Calling Gemini model: ${model}`);
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.3,
-        responseMimeType: "application/json",
-      },
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    console.log("[CV Tailor] Request timed out after 30s");
+    controller.abort();
+  }, 30000);
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini API error (${res.status}): ${err}`);
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+
+    clearTimeout(timeout);
+    console.log(`[CV Tailor] Response status: ${res.status}`);
+
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`Gemini API error (${res.status}): ${err}`);
+    }
+
+    const data = await res.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
+      console.log("[CV Tailor] Response data:", JSON.stringify(data).slice(0, 500));
+      throw new Error("Empty response from Gemini");
+    }
+    console.log(`[CV Tailor] Got response (${text.length} chars)`);
+    return text;
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error(`Request timed out after 30s (model: ${model}). Try a different model in settings.`);
+    }
+    throw err;
   }
-
-  const data = await res.json();
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error("Empty response from Gemini");
-  return text;
 }
 
-export async function testApiKey(apiKey: string): Promise<boolean> {
+export async function testApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const result = await callGemini(apiKey, 'Respond with exactly: {"ok": true}');
     const parsed = JSON.parse(result);
-    return parsed.ok === true;
-  } catch {
-    return false;
+    return { valid: parsed.ok === true };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
