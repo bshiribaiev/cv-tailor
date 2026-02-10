@@ -1,25 +1,33 @@
-/** Content script auto-injected on job sites — shows a floating "Tailor Resume" button */
+/** Content script auto-injected on job sites — collapsible floating panel (top-right) */
+
+// Internal state persisted across collapse/expand
+let currentState: "idle" | "extracting" | "tailoring" | "done" | "error" = "idle";
+let currentStage = "";
+let currentPct = 0;
+let currentPayload: { pdfBase64?: string; texBase64?: string; filename: string } | null = null;
+let currentError = "";
+let hasResume = false;
+let hasApiKey = false;
 
 function init() {
-  // Don't inject twice
   if (document.getElementById("cv-tailor-fab")) return;
 
-  const fab = document.createElement("div");
-  fab.id = "cv-tailor-fab";
-  fab.innerHTML = `
-    <div style="
+  const root = document.createElement("div");
+  root.id = "cv-tailor-fab";
+  root.innerHTML = `
+    <div id="cv-tailor-root" style="
       position: fixed;
-      bottom: 24px;
+      top: 24px;
       right: 24px;
       z-index: 2147483647;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     ">
-      <button id="cv-tailor-btn" style="
+      <button id="cv-tailor-pill" style="
         background: #2563eb;
         color: white;
         border: none;
         border-radius: 12px;
-        padding: 12px 20px;
+        padding: 10px 18px;
         font-size: 14px;
         font-weight: 600;
         cursor: pointer;
@@ -29,84 +37,103 @@ function init() {
         gap: 8px;
         transition: all 0.2s;
       ">
-        <span style="font-size: 16px;">&#9998;</span>
+        <span style="font-size: 15px;">&#9998;</span>
         Tailor Resume
       </button>
-      <div id="cv-tailor-status" style="
+      <div id="cv-tailor-panel" style="
         display: none;
         background: white;
         border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        min-width: 240px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.18);
+        width: 320px;
         font-size: 13px;
         color: #333;
-      "></div>
+        overflow: hidden;
+      ">
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 12px 16px;
+          border-bottom: 1px solid #e5e7eb;
+        ">
+          <span style="font-weight: 700; font-size: 15px;">CV Tailor</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <button id="cv-tailor-settings" style="
+              background: none; border: none; cursor: pointer;
+              color: #9ca3af; font-size: 15px; padding: 2px;
+            " title="Settings">&#9881;</button>
+            <button id="cv-tailor-close" style="
+              background: none; border: none; cursor: pointer;
+              color: #9ca3af; font-size: 18px; padding: 2px; line-height: 1;
+            " title="Close">&#10005;</button>
+          </div>
+        </div>
+        <div id="cv-tailor-body" style="padding: 14px 16px;"></div>
+      </div>
     </div>
   `;
-  document.body.appendChild(fab);
+  document.body.appendChild(root);
 
-  const btn = document.getElementById("cv-tailor-btn")!;
-  const status = document.getElementById("cv-tailor-status")!;
+  const pill = document.getElementById("cv-tailor-pill")!;
+  const panel = document.getElementById("cv-tailor-panel")!;
+  const body = document.getElementById("cv-tailor-body")!;
+  const settingsBtn = document.getElementById("cv-tailor-settings")!;
+  const closeBtn = document.getElementById("cv-tailor-close")!;
 
-  // Hover effect
-  btn.addEventListener("mouseenter", () => {
-    btn.style.background = "#1d4ed8";
-    btn.style.transform = "scale(1.05)";
+  // Hover on pill
+  pill.addEventListener("mouseenter", () => {
+    pill.style.background = "#1d4ed8";
+    pill.style.transform = "scale(1.05)";
   });
-  btn.addEventListener("mouseleave", () => {
-    btn.style.background = "#2563eb";
-    btn.style.transform = "scale(1)";
+  pill.addEventListener("mouseleave", () => {
+    pill.style.background = "#2563eb";
+    pill.style.transform = "scale(1)";
   });
 
-  btn.addEventListener("click", () => {
-    btn.style.display = "none";
-    status.style.display = "block";
-    status.innerHTML = `<p style="margin:0">Extracting job description...</p>`;
-
-    // Extract JD from page
-    const jd = extractJD();
-    if (!jd.description || jd.description.length < 50) {
-      status.innerHTML = `<p style="margin:0;color:#dc2626">Could not extract job description from this page.</p>
-        <button id="cv-tailor-retry" style="margin-top:8px;padding:6px 12px;background:#e5e7eb;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Retry</button>`;
-      document.getElementById("cv-tailor-retry")?.addEventListener("click", () => {
-        status.style.display = "none";
-        btn.style.display = "flex";
-      });
-      return;
+  // Click pill → immediately start tailoring + expand panel
+  pill.addEventListener("click", () => {
+    pill.style.display = "none";
+    panel.style.display = "block";
+    if (currentState === "idle") {
+      startTailoring();
+    } else {
+      renderBody();
     }
-
-    status.innerHTML = `
-      <p style="margin:0 0 8px 0;font-weight:600">${jd.title || "Job posting"} ${jd.company ? `@ ${jd.company}` : ""}</p>
-      <p style="margin:0 0 4px 0">Tailoring resume...</p>
-      <div style="background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden">
-        <div id="cv-tailor-progress" style="background:#2563eb;height:100%;width:10%;transition:width 0.3s"></div>
-      </div>
-      <p id="cv-tailor-pct" style="margin:4px 0 0;font-size:11px;color:#666">10%</p>
-    `;
-
-    // Send to service worker
-    chrome.runtime.sendMessage({
-      type: "START_TAILORING",
-      payload: { jobDescription: jd.description },
-    });
   });
 
-  // Listen for state changes via chrome.storage (reliable for content scripts)
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "session" || !changes.tailoring_state) return;
-    const state = changes.tailoring_state.newValue;
-    if (!state) return;
+  // Collapse
+  closeBtn.addEventListener("click", () => {
+    panel.style.display = "none";
+    pill.style.display = "flex";
+  });
 
-    if (state.pdfBase64 || state.texBase64) {
-      const isPdf = !!state.pdfBase64;
-      const hint = isPdf ? "" : `<p style="margin:0 0 6px 0;font-size:11px;color:#666">Compile .tex in Overleaf for PDF</p>`;
-      status.innerHTML = `
-        <p style="margin:0 0 8px 0;color:#16a34a;font-weight:600">Resume tailored!</p>
+  // Settings
+  settingsBtn.addEventListener("click", () => {
+    chrome.runtime.sendMessage({ type: "OPEN_OPTIONS" });
+  });
+
+  function renderBody() {
+    if (currentState === "idle") {
+      body.innerHTML = `
+        <p style="margin:0;color:#666;font-size:12px;">Click "Tailor Resume" to start.</p>
+      `;
+    } else if (currentState === "extracting" || currentState === "tailoring") {
+      body.innerHTML = `
+        <p style="margin:0 0 8px 0;font-size:13px;">${currentStage || "Processing..."}</p>
+        <div style="background:#e5e7eb;border-radius:4px;height:6px;overflow:hidden;">
+          <div id="cv-tailor-progress" style="background:#2563eb;height:100%;width:${currentPct}%;transition:width 0.3s;"></div>
+        </div>
+        <p id="cv-tailor-pct" style="margin:4px 0 0;font-size:11px;color:#666;">${currentPct}%</p>
+      `;
+    } else if (currentState === "done" && currentPayload) {
+      const isPdf = !!currentPayload.pdfBase64;
+      const hint = isPdf ? "" : `<p style="margin:0 0 8px 0;font-size:11px;color:#666;">Compile .tex in Overleaf for PDF</p>`;
+      body.innerHTML = `
+        <p style="margin:0 0 8px 0;color:#16a34a;font-weight:600;">Resume tailored!</p>
         ${hint}
         <button id="cv-tailor-download" style="
-          width:100%;padding:8px;background:#16a34a;color:white;border:none;
+          width:100%;padding:10px;background:#16a34a;color:white;border:none;
           border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;
         ">Download ${isPdf ? "PDF" : ".tex"}</button>
         <button id="cv-tailor-again" style="
@@ -114,40 +141,143 @@ function init() {
           border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px;
         ">Tailor Another</button>
       `;
-      document.getElementById("cv-tailor-download")?.addEventListener("click", () => {
-        let blob: Blob;
-        if (state.pdfBase64) {
-          const bytes = Uint8Array.from(atob(state.pdfBase64), (c) => c.charCodeAt(0));
-          blob = new Blob([bytes], { type: "application/pdf" });
-        } else {
-          const content = decodeURIComponent(escape(atob(state.texBase64!)));
-          blob = new Blob([content], { type: "text/plain" });
-        }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = state.filename || "Resume_Tailored.pdf";
-        a.click();
-        URL.revokeObjectURL(url);
-      });
+      document.getElementById("cv-tailor-download")?.addEventListener("click", () => downloadFile(currentPayload!));
       document.getElementById("cv-tailor-again")?.addEventListener("click", () => {
-        status.style.display = "none";
-        btn.style.display = "flex";
+        currentState = "idle";
+        currentPayload = null;
+        renderBody();
       });
-    } else if (state.error) {
-      status.innerHTML = `
-        <p style="margin:0;color:#dc2626">${state.error}</p>
-        <button id="cv-tailor-retry2" style="margin-top:8px;padding:6px 12px;background:#e5e7eb;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Try Again</button>
+    } else if (currentState === "error") {
+      body.innerHTML = `
+        <p style="margin:0 0 8px 0;color:#dc2626;font-size:13px;">${currentError}</p>
+        <button id="cv-tailor-retry" style="
+          width:100%;padding:8px;background:#e5e7eb;border:none;
+          border-radius:8px;cursor:pointer;font-size:12px;
+        ">Try Again</button>
       `;
-      document.getElementById("cv-tailor-retry2")?.addEventListener("click", () => {
-        status.style.display = "none";
-        btn.style.display = "flex";
+      document.getElementById("cv-tailor-retry")?.addEventListener("click", () => {
+        currentState = "idle";
+        currentError = "";
+        renderBody();
       });
+    }
+  }
+
+  function startTailoring() {
+    currentState = "extracting";
+    currentStage = "Extracting job description...";
+    currentPct = 5;
+    renderBody();
+
+    // Check resume/API key are configured before proceeding
+    chrome.runtime.sendMessage({ type: "GET_STATUS" }, (res: any) => {
+      if (res?.payload) {
+        hasResume = res.payload.hasResume;
+        hasApiKey = res.payload.hasApiKey;
+      }
+      if (!hasResume || !hasApiKey) {
+        currentState = "error";
+        currentError = !hasResume
+          ? "No resume uploaded. Open Settings to upload your .tex file."
+          : "No API key set. Open Settings to add your Gemini API key.";
+        renderBody();
+        return;
+      }
+
+      const jd = extractJD();
+      if (!jd.description || jd.description.length < 50) {
+        currentState = "error";
+        currentError = "Could not extract job description from this page.";
+        renderBody();
+        return;
+      }
+
+      currentState = "tailoring";
+      currentStage = "Tailoring resume...";
+      currentPct = 10;
+      renderBody();
+
+      chrome.runtime.sendMessage({
+        type: "START_TAILORING",
+        payload: { jobDescription: jd.description },
+      });
+    });
+  }
+
+  function downloadFile(payload: { pdfBase64?: string; texBase64?: string; filename: string }) {
+    let blob: Blob;
+    if (payload.pdfBase64) {
+      const bytes = Uint8Array.from(atob(payload.pdfBase64), (c) => c.charCodeAt(0));
+      blob = new Blob([bytes], { type: "application/pdf" });
     } else {
-      const bar = document.getElementById("cv-tailor-progress");
-      const pct = document.getElementById("cv-tailor-pct");
-      if (bar) bar.style.width = `${state.pct}%`;
-      if (pct) pct.textContent = `${state.stage} ${state.pct}%`;
+      const content = decodeURIComponent(escape(atob(payload.texBase64!)));
+      blob = new Blob([content], { type: "text/plain" });
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = payload.filename || "resume.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleProgress(stage: string, pct: number) {
+    currentState = "tailoring";
+    currentStage = stage;
+    currentPct = pct;
+    // Update in-place if panel is open and progress elements exist
+    const bar = document.getElementById("cv-tailor-progress");
+    const pctEl = document.getElementById("cv-tailor-pct");
+    if (bar && pctEl) {
+      bar.style.width = `${pct}%`;
+      pctEl.textContent = `${pct}%`;
+      // Update stage text (first <p> in body)
+      const stageEl = body.querySelector("p");
+      if (stageEl) stageEl.textContent = stage;
+    }
+    // If panel hidden, state is saved for when user re-expands
+  }
+
+  function handleComplete(payload: { pdfBase64?: string; texBase64?: string; filename: string }) {
+    currentState = "done";
+    currentPayload = payload;
+    currentPct = 100;
+    // Re-render if panel is visible
+    if (panel.style.display !== "none") renderBody();
+  }
+
+  function handleError(error: string) {
+    currentState = "error";
+    currentError = error;
+    if (panel.style.display !== "none") renderBody();
+  }
+
+  // Primary: runtime messages from service worker
+  chrome.runtime.onMessage.addListener((message: any) => {
+    if (message.type === "TAILORING_PROGRESS") {
+      handleProgress(message.payload.stage, message.payload.pct);
+    } else if (message.type === "TAILORING_COMPLETE") {
+      handleComplete(message.payload);
+    } else if (message.type === "TAILORING_ERROR") {
+      handleError(message.payload.error);
+    }
+  });
+
+  // Fallback: storage changes
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "session" || !changes.tailoring_state) return;
+    const state = changes.tailoring_state.newValue as {
+      stage: string; pct: number;
+      pdfBase64?: string; texBase64?: string; filename?: string; error?: string;
+    } | undefined;
+    if (!state) return;
+
+    if (state.pdfBase64 || state.texBase64) {
+      handleComplete({ ...state, filename: state.filename || "resume.tex" });
+    } else if (state.error) {
+      handleError(state.error);
+    } else {
+      handleProgress(state.stage, state.pct);
     }
   });
 }

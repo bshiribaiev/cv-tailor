@@ -13,7 +13,7 @@ export function App() {
   const [statusText, setStatusText] = useState("");
   const [pdfBase64, setPdfBase64] = useState<string | null>(null);
   const [texBase64, setTexBase64] = useState<string | null>(null);
-  const [filename, setFilename] = useState("Resume_Tailored.tex");
+  const [filename, setFilename] = useState("resume.tex");
   const [error, setError] = useState<string | null>(null);
   const [jobDescription, setJobDescription] = useState<string | null>(null);
 
@@ -33,7 +33,7 @@ export function App() {
           setStage("done");
           setPdfBase64(state.pdfBase64 ?? null);
           setTexBase64(state.texBase64 ?? null);
-          setFilename(state.filename ?? "Resume_Tailored.tex");
+          setFilename(state.filename ?? "resume.tex");
           setProgress(100);
         } else if (state.error) {
           setStage("error");

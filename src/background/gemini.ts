@@ -35,14 +35,14 @@ RULES:
 - Maintain professional tone
 - These skills should always be mentioned somewhere if relevant: ${alwaysIncludeSkills.join(", ")}
 
-LENGTH RULES (critical for PDF formatting — one printed line is ~88 characters):
-- Each bullet must be EITHER ≤88 characters (one line) OR 175-200 characters (two full lines)
-- NEVER output bullets between 89-170 characters — this causes ugly wrapping with 1-2 dangling words
+LENGTH RULES (critical — one printed line ≈ 88 characters, resume MUST fit one page):
+- MOST bullets MUST be ≤88 characters (one printed line). Prefer this strongly.
+- Only 1-2 critical bullets (with important metrics/achievements) may be 2 lines: 160-176 characters
+- NEVER exceed 176 characters. NEVER. Three-line bullets break the layout.
+- NEVER output 89-159 characters — this causes ugly wrapping with dangling words on line 2
 - If the original bullet is ≤88 chars, the tailored version MUST also be ≤88 chars
-- If the original is >170 chars, aim for 175-200 chars (two clean lines)
-- When in doubt, make it SHORTER. Concise and punchy is always better
-- Total length across all bullets should be similar to or LESS than the original total
-- Count your characters carefully for each bullet before returning
+- When in doubt, make it SHORTER. Cut filler words aggressively. Concise > comprehensive.
+- Count characters carefully for every bullet before returning
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -90,10 +90,11 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
   console.log(`[CV Tailor] Calling Gemini model: ${model}`);
 
   const controller = new AbortController();
+  const timeoutMs = 120000;
   const timeout = setTimeout(() => {
-    console.log("[CV Tailor] Request timed out after 30s");
+    console.log(`[CV Tailor] Request timed out after ${timeoutMs / 1000}s`);
     controller.abort();
-  }, 30000);
+  }, timeoutMs);
 
   try {
     const res = await fetch(url, {
@@ -128,7 +129,7 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error(`Request timed out after 30s (model: ${model}). Try a different model in settings.`);
+      throw new Error(`Request timed out after ${timeoutMs / 1000}s (model: ${model}). Try a different model in settings.`);
     }
     throw err;
   }

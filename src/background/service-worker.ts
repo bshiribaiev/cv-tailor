@@ -8,6 +8,9 @@ import {
 import { tailorBullets, tailorSkills, testApiKey } from "./gemini";
 import type { TailoredSkills } from "./gemini";
 
+// Allow content scripts to access session storage (for floating button progress)
+chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
+
 const ALWAYS_INCLUDE_SKILLS = [
   "Python",
   "Java",
@@ -30,6 +33,10 @@ chrome.runtime.onMessage.addListener(
     }
     if (message.type === "START_TAILORING") {
       handleTailoring(message.payload.jobDescription);
+      return false;
+    }
+    if (message.type === "OPEN_OPTIONS") {
+      chrome.runtime.openOptionsPage();
       return false;
     }
   },
@@ -193,19 +200,20 @@ async function handleTailoring(jobDescription: string) {
       ALWAYS_INCLUDE_SKILLS,
     );
 
-    // Post-process: trim bullets in the danger zone (89-170 chars)
+    // Post-process: enforce length constraints
+    // Valid: ≤88 chars (1 line) or 160-176 chars (2 lines)
+    // Invalid: 89-159 (ugly wrap) or >176 (3 lines) → revert to original
+    const origMap = new Map(expBullets.map((b) => [b.id, b.originalText]));
     for (const b of tailoredBullets) {
       const len = b.tailoredText.length;
-      if (len > 88 && len < 175) {
-        // Trim to last word boundary at or before 88 chars
-        const trimmed = b.tailoredText.substring(0, 88);
-        const lastSpace = trimmed.lastIndexOf(" ");
-        if (lastSpace > 60) {
-          b.tailoredText = trimmed.substring(0, lastSpace);
+      if (len > 176 || (len > 88 && len < 160)) {
+        const orig = origMap.get(b.id);
+        if (orig) {
+          console.log(
+            `[CV Tailor] Reverted bullet ${b.id}: ${len} chars (bad length) → original (${orig.length})`,
+          );
+          b.tailoredText = orig;
         }
-        console.log(
-          `[CV Tailor] Trimmed bullet ${b.id}: ${len} → ${b.tailoredText.length} chars`,
-        );
       }
     }
 
@@ -230,7 +238,7 @@ async function handleTailoring(jobDescription: string) {
       modifiedTex = replaceSkillsInTex(modifiedTex, tailoredSkills);
     }
 
-    const baseName = resume.name.replace(/\s+/g, "_");
+    const baseName = `${resume.name.replace(/\s+/g, "_")}_resume`;
 
     await progress("Compiling PDF...", 80);
 
@@ -243,7 +251,7 @@ async function handleTailoring(jobDescription: string) {
         binary += String.fromCharCode(bytes[i]);
       }
       const pdfBase64 = btoa(binary);
-      const filename = `${baseName}_Resume_Tailored.pdf`;
+      const filename = `${baseName}.pdf`;
 
       await saveTailoringState({
         stage: "done",
@@ -258,7 +266,7 @@ async function handleTailoring(jobDescription: string) {
     } else {
       // Fallback: offer .tex download
       console.log("[CV Tailor] PDF compilation unavailable, offering .tex");
-      const filename = `${baseName}_Resume_Tailored.tex`;
+      const filename = `${baseName}.tex`;
       const texBase64 = btoa(unescape(encodeURIComponent(modifiedTex)));
 
       await saveTailoringState({

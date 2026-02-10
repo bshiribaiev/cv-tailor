@@ -17,6 +17,7 @@ export type Message =
   | { type: "TAILORING_ERROR"; payload: { error: string } }
   | { type: "TEST_API_KEY"; payload: { apiKey: string } }
   | { type: "GET_STATUS" }
+  | { type: "OPEN_OPTIONS" }
   | {
       type: "STATUS_RESULT";
       payload: {
