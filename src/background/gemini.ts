@@ -19,22 +19,35 @@ export async function tailorBullets(
   bullets: { id: string; originalText: string }[],
   alwaysIncludeSkills: string[],
 ): Promise<TailoredBullet[]> {
-  const prompt = `You are a resume tailoring assistant. Given a job description and a list of resume bullet points, reword each bullet to naturally incorporate relevant keywords from the job description.
+  const bulletsWithLen = bullets.map((b) => ({
+    id: b.id,
+    text: b.originalText,
+    chars: b.originalText.length,
+  }));
+
+  const prompt = `You are a resume tailoring assistant. Given a job description and resume bullet points, reword each bullet to naturally incorporate relevant keywords from the job description.
 
 RULES:
 - Keep the same achievement/metric/outcome — only adjust phrasing
 - Do NOT fabricate new achievements, technologies, or metrics
 - Do NOT change numbers, percentages, or dollar amounts
 - Incorporate 1-3 relevant keywords per bullet where natural
-- Keep bullet length similar to original (within 15 words)
 - Maintain professional tone
 - These skills should always be mentioned somewhere if relevant: ${alwaysIncludeSkills.join(", ")}
+
+LENGTH RULES (critical for PDF formatting — one line is ~95 characters):
+- Each bullet must be EITHER ≤95 characters (one line) OR 170-200 characters (two full lines)
+- NEVER output bullets between 96-165 characters — this causes ugly wrapping with 1-2 dangling words on a second line
+- If the original bullet is ≤95 chars, the tailored version MUST also be ≤95 chars
+- If the original is >165 chars, aim for 170-200 chars (two clean lines)
+- When in doubt, make it shorter. Concise is better than wordy
+- Total length across all bullets should be similar to or less than the original total
 
 JOB DESCRIPTION:
 ${jobDescription}
 
-RESUME BULLETS:
-${JSON.stringify(bullets.map((b) => ({ id: b.id, text: b.originalText })))}
+RESUME BULLETS (with character counts):
+${JSON.stringify(bulletsWithLen)}
 
 Return a JSON array: [{"id": "...", "tailoredText": "..."}]`;
 
