@@ -41,10 +41,10 @@ function init() {
         display: none;
         position: absolute;
         bottom: 0;
-        right: 0;
+        right: 12px;
         background: white;
-        border-radius: 12px 0 0 12px;
-        box-shadow: -2px 2px 16px rgba(0,0,0,0.18);
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0,0,0,0.18);
         width: 300px;
         font-size: 13px;
         color: #333;
