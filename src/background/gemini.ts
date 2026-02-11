@@ -25,33 +25,32 @@ export async function tailorBullets(
     chars: b.originalText.length,
   }));
 
-  const prompt = `You are an expert resume tailoring assistant. Your goal: maximize keyword match between resume bullets and the job description's REQUIRED SKILLS.
+  const prompt = `You are an expert resume tailoring assistant. Maximize keyword overlap between resume bullets and the job description.
 
-STEP 1 — EXTRACT JD REQUIREMENTS:
-Before rewriting, identify ALL required skills, technologies, frameworks, and keywords from the job description. These are your primary targets.
+STEP 1 — EXTRACT ALL JD KEYWORDS in these categories:
+- Hard skills: languages, frameworks, databases, tools (e.g., Java, Spring Boot, MySQL, BitBucket)
+- Process keywords: methodologies, practices (e.g., testing, code review, documentation, Agile, CI/CD)
+- Domain keywords: industry terms, concepts (e.g., microservices, REST APIs, data pipelines)
 
-STEP 2 — REWRITE EACH BULLET using Google's XYZ format:
-"Accomplished [X] by implementing [Y], resulting in [Z]"
-- X = what you accomplished (action + deliverable)
-- Y = how you did it (technologies, methods — USE JD KEYWORDS HERE)
-- Z = measurable impact (metrics, outcomes)
+STEP 2 — REWRITE EACH BULLET to incorporate JD keywords:
 
 REWRITING RULES:
-- AGGRESSIVELY incorporate JD-required skills into every bullet. Each bullet should contain 2-4 JD keywords.
-- Replace generic terms with JD-specific ones (e.g., if JD says "Spring Boot MVC" don't just say "backend")
-- If the original bullet used a technology, you MAY swap it for the JD-equivalent IF the work is similar (e.g., "Express.js backend" → "RESTful Spring Boot microservice" if the person has Spring Boot experience)
-- Keep the same achievement/metric/outcome — only adjust HOW it's described
+- Each bullet MUST contain 2-4 JD keywords from ANY category (hard skills, process, domain)
+- You MAY swap similar technologies when the underlying work is equivalent:
+  PostgreSQL→MySQL, Express.js→Spring Boot, GitHub→BitBucket, any DB→the JD's DB, etc.
+- You MAY add process context to existing achievements:
+  "Built X" → "Built and unit-tested X through code review"
+  "Deployed Y" → "Deployed Y with automated testing and documentation"
+- Keep the SAME achievement/metric/outcome — only adjust HOW it's described and WHAT tools are mentioned
 - Do NOT fabricate new achievements or metrics. Do NOT change numbers, percentages, or dollar amounts.
-- Do NOT add technologies the candidate never used — only reframe existing work using JD terminology
 - These skills should appear across bullets if relevant: ${alwaysIncludeSkills.join(", ")}
 
-LENGTH RULES (critical — one printed line ≈ 88 characters, resume MUST fit one page):
-- MOST bullets MUST be ≤88 characters (one printed line). Prefer this strongly.
-- Only 1-2 critical bullets (with important metrics) may be 2 lines: 160-176 characters
-- NEVER exceed 176 characters. Three-line bullets break the layout.
-- NEVER output 89-159 characters — causes ugly wrapping
-- When in doubt, make it SHORTER. Cut filler words. Concise > comprehensive.
-- Count characters carefully for every bullet before returning
+LENGTH RULES (one printed line ≈ 88 characters):
+- Prefer ≤88 characters (1 line). Most bullets should aim for this.
+- If you can't fit enough JD keywords in 88 chars, expand to 160-176 chars (2 lines) and pack in more keywords.
+- NEVER output 89-159 characters — causes ugly wrapping. Either ≤88 or 160-176.
+- NEVER exceed 176 characters.
+- Count characters carefully for every bullet before returning.
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -71,15 +70,16 @@ export async function tailorSkills(
   skillLines: { label: string; items: string }[],
   alwaysIncludeSkills: string[],
 ): Promise<TailoredSkills[]> {
-  const prompt = `You are a resume tailoring assistant. Given a job description and skill categories from a resume, update the skills to better match the job.
+  const prompt = `You are a resume tailoring assistant. Update skills to maximize match with the job description.
 
 RULES:
-- Reorder skills within each category — put most relevant to the job first
-- If the job requires a language, framework, or tool that fits a category but ISN'T listed, ADD it (max 2 new skills per category)
+- Reorder skills — put JD-required skills first in each category
+- ADD missing JD-required tools/skills to the appropriate category (max 3 new per category)
+- Prioritize skills the JD explicitly lists as "required" or "must-have"
 - Do NOT remove any existing skills
-- These skills must always appear: ${alwaysIncludeSkills.join(", ")}
+- These must always appear: ${alwaysIncludeSkills.join(", ")}
 - Keep comma-separated format
-- Keep each category to one line (~80 chars max for the items)
+- Keep each category to one line (~85 chars max for items)
 
 JOB DESCRIPTION:
 ${jobDescription}
@@ -113,7 +113,7 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.3,
+          temperature: 0.5,
           responseMimeType: "application/json",
         },
       }),
@@ -142,6 +142,22 @@ async function callGemini(apiKey: string, prompt: string): Promise<string> {
     }
     throw err;
   }
+}
+
+export async function shortenBullets(
+  apiKey: string,
+  bullets: TailoredBullet[],
+  maxLen: number,
+): Promise<TailoredBullet[]> {
+  const prompt = `Shorten each bullet to ≤${maxLen} characters. Keep all JD keywords and metrics. Cut filler words, combine clauses, use shorter synonyms. Do NOT remove technical terms or numbers.
+
+BULLETS:
+${JSON.stringify(bullets.map((b) => ({ id: b.id, text: b.tailoredText, chars: b.tailoredText.length })))}
+
+Return JSON array: [{"id": "...", "tailoredText": "..."}]`;
+
+  const result = await callGemini(apiKey, prompt);
+  return JSON.parse(result) as TailoredBullet[];
 }
 
 export async function testApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {

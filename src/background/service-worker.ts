@@ -5,7 +5,7 @@ import {
   saveTailoringState,
   clearTailoringState,
 } from "../shared/storage";
-import { tailorBullets, tailorSkills, testApiKey } from "./gemini";
+import { tailorBullets, tailorSkills, shortenBullets, testApiKey } from "./gemini";
 import type { TailoredSkills } from "./gemini";
 
 // Allow content scripts to access session storage (for floating button progress)
@@ -200,19 +200,34 @@ async function handleTailoring(jobDescription: string) {
       ALWAYS_INCLUDE_SKILLS,
     );
 
-    // Post-process: enforce length constraints
-    // Valid: ≤88 chars (1 line) or 160-176 chars (2 lines)
-    // Invalid: 89-159 (ugly wrap) or >176 (3 lines) → revert to original
+    // Post-process: only enforce max length (176 chars = 2 lines)
+    // Bullets ≤176 are accepted as-is (dead zone removed — originals already have 89-159 char bullets)
+    const MAX_BULLET_LEN = 176;
     const origMap = new Map(expBullets.map((b) => [b.id, b.originalText]));
-    for (const b of tailoredBullets) {
-      const len = b.tailoredText.length;
-      if (len > 176 || (len > 88 && len < 160)) {
-        const orig = origMap.get(b.id);
-        if (orig) {
-          console.log(
-            `[CV Tailor] Reverted bullet ${b.id}: ${len} chars (bad length) → original (${orig.length})`,
-          );
-          b.tailoredText = orig;
+    const tooLong = tailoredBullets.filter((b) => b.tailoredText.length > MAX_BULLET_LEN);
+
+    if (tooLong.length > 0) {
+      console.log(`[CV Tailor] ${tooLong.length} bullets over ${MAX_BULLET_LEN} chars, requesting shorter versions`);
+      try {
+        const shortened = await shortenBullets(apiKey, tooLong, MAX_BULLET_LEN);
+        const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
+        for (const b of tailoredBullets) {
+          const short = shortenedMap.get(b.id);
+          if (short && short.length <= MAX_BULLET_LEN) {
+            b.tailoredText = short;
+          } else if (b.tailoredText.length > MAX_BULLET_LEN) {
+            const orig = origMap.get(b.id);
+            if (orig) {
+              console.log(`[CV Tailor] Reverted bullet ${b.id}: still ${b.tailoredText.length} chars after retry`);
+              b.tailoredText = orig;
+            }
+          }
+        }
+      } catch (err) {
+        console.log("[CV Tailor] shortenBullets failed, reverting long bullets:", err);
+        for (const b of tooLong) {
+          const orig = origMap.get(b.id);
+          if (orig) b.tailoredText = orig;
         }
       }
     }

@@ -17,7 +17,7 @@ function init() {
   root.innerHTML = `
     <div id="cv-tailor-root" style="
       position: fixed;
-      top: 80px;
+      bottom: 80px;
       right: 0;
       z-index: 2147483647;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -40,7 +40,7 @@ function init() {
       <div id="cv-tailor-panel" style="
         display: none;
         position: absolute;
-        top: 0;
+        bottom: 0;
         right: 0;
         background: white;
         border-radius: 12px 0 0 12px;
@@ -87,14 +87,13 @@ function init() {
     tab.style.background = currentState === "tailoring" ? "#f59e0b" : "#2563eb";
   });
 
-  // Click tab → start tailoring (or expand panel if already in progress/done)
+  // Click tab → expand panel + start tailoring if idle
   tab.addEventListener("click", () => {
+    tab.style.display = "none";
+    panel.style.display = "block";
     if (currentState === "idle") {
       startTailoring();
     } else {
-      // Show panel for current state
-      tab.style.display = "none";
-      panel.style.display = "block";
       renderBody();
     }
   });
@@ -166,8 +165,8 @@ function init() {
     currentState = "extracting";
     currentStage = "Extracting job description...";
     currentPct = 5;
-    // Turn tab amber to indicate working
     tab.style.background = "#f59e0b";
+    renderBody();
 
     chrome.runtime.sendMessage({ type: "GET_STATUS" }, (res: any) => {
       if (res?.payload) {
@@ -201,7 +200,7 @@ function init() {
       currentState = "tailoring";
       currentStage = "Tailoring resume...";
       currentPct = 10;
-      // Stay as tab (amber) — don't expand panel yet
+      renderBody();
 
       chrome.runtime.sendMessage({
         type: "START_TAILORING",
