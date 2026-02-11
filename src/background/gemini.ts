@@ -25,23 +25,32 @@ export async function tailorBullets(
     chars: b.originalText.length,
   }));
 
-  const prompt = `You are a resume tailoring assistant. Given a job description and resume bullet points, reword each bullet to naturally incorporate relevant keywords from the job description.
+  const prompt = `You are an expert resume tailoring assistant. Your goal: maximize keyword match between resume bullets and the job description's REQUIRED SKILLS.
 
-RULES:
-- Keep the same achievement/metric/outcome — only adjust phrasing
-- Do NOT fabricate new achievements, technologies, or metrics
-- Do NOT change numbers, percentages, or dollar amounts
-- Incorporate 1-3 relevant keywords per bullet where natural
-- Maintain professional tone
-- These skills should always be mentioned somewhere if relevant: ${alwaysIncludeSkills.join(", ")}
+STEP 1 — EXTRACT JD REQUIREMENTS:
+Before rewriting, identify ALL required skills, technologies, frameworks, and keywords from the job description. These are your primary targets.
+
+STEP 2 — REWRITE EACH BULLET using Google's XYZ format:
+"Accomplished [X] by implementing [Y], resulting in [Z]"
+- X = what you accomplished (action + deliverable)
+- Y = how you did it (technologies, methods — USE JD KEYWORDS HERE)
+- Z = measurable impact (metrics, outcomes)
+
+REWRITING RULES:
+- AGGRESSIVELY incorporate JD-required skills into every bullet. Each bullet should contain 2-4 JD keywords.
+- Replace generic terms with JD-specific ones (e.g., if JD says "Spring Boot MVC" don't just say "backend")
+- If the original bullet used a technology, you MAY swap it for the JD-equivalent IF the work is similar (e.g., "Express.js backend" → "RESTful Spring Boot microservice" if the person has Spring Boot experience)
+- Keep the same achievement/metric/outcome — only adjust HOW it's described
+- Do NOT fabricate new achievements or metrics. Do NOT change numbers, percentages, or dollar amounts.
+- Do NOT add technologies the candidate never used — only reframe existing work using JD terminology
+- These skills should appear across bullets if relevant: ${alwaysIncludeSkills.join(", ")}
 
 LENGTH RULES (critical — one printed line ≈ 88 characters, resume MUST fit one page):
 - MOST bullets MUST be ≤88 characters (one printed line). Prefer this strongly.
-- Only 1-2 critical bullets (with important metrics/achievements) may be 2 lines: 160-176 characters
-- NEVER exceed 176 characters. NEVER. Three-line bullets break the layout.
-- NEVER output 89-159 characters — this causes ugly wrapping with dangling words on line 2
-- If the original bullet is ≤88 chars, the tailored version MUST also be ≤88 chars
-- When in doubt, make it SHORTER. Cut filler words aggressively. Concise > comprehensive.
+- Only 1-2 critical bullets (with important metrics) may be 2 lines: 160-176 characters
+- NEVER exceed 176 characters. Three-line bullets break the layout.
+- NEVER output 89-159 characters — causes ugly wrapping
+- When in doubt, make it SHORTER. Cut filler words. Concise > comprehensive.
 - Count characters carefully for every bullet before returning
 
 JOB DESCRIPTION:
