@@ -6,9 +6,11 @@ import {
   getResume,
   saveTailoringState,
   clearTailoringState,
+  getTailorSkills,
+  getCustomInstructions,
 } from "../shared/storage";
-import { tailorBullets, tailorSkills, shortenBullets, testApiKey } from "./gemini";
-import type { TailoredSkills } from "./gemini";
+import { tailorBullets, tailorSkills, shortenBullets, expandBullets, refineBullets, testApiKey } from "./gemini";
+import type { TailoredBullet, TailoredSkills } from "./gemini";
 
 // Allow content scripts to access session storage (for floating button progress)
 chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
@@ -193,12 +195,22 @@ async function handleTailoring(jobDescription: string) {
     if (expBullets.length === 0)
       throw new Error("No experience bullets found");
 
+    // Collect candidate's skills for context
+    const skillsSec = resume.sections.find((s) => s.type === "skills");
+    const candidateSkills = skillsSec?.entries[0]?.skillLines
+      ?.map((sl) => `${sl.label}: ${sl.items}`)
+      .join("; ") ?? "";
+
+    const customInstructions = await getCustomInstructions();
+
     await progress("Tailoring experience...", 30);
 
     const tailoredBullets = await tailorBullets(
       jobDescription,
       expBullets,
       ALWAYS_INCLUDE_SKILLS,
+      candidateSkills,
+      customInstructions,
     );
 
     // Fill in any missing tailoredText with originals
@@ -208,6 +220,25 @@ async function handleTailoring(jobDescription: string) {
         console.log(`[CV Tailor] Missing tailoredText for ${b.id}, using original`);
         b.tailoredText = origMap.get(b.id) ?? "";
       }
+    }
+
+    // Refinement pass: fix domain mismatches, length issues, keyword gaps
+    await progress("Refining bullets...", 40);
+    try {
+      const refined = await refineBullets(
+        jobDescription,
+        expBullets,
+        tailoredBullets,
+        candidateSkills,
+        customInstructions,
+      );
+      const refinedMap = new Map(refined.map((b) => [b.id, b.tailoredText]));
+      for (const b of tailoredBullets) {
+        const r = refinedMap.get(b.id);
+        if (r) b.tailoredText = r;
+      }
+    } catch (err) {
+      console.log("[CV Tailor] refineBullets failed, using first-pass results:", err);
     }
 
     // Post-process: only enforce max length (176 chars = 2 lines)
@@ -254,16 +285,41 @@ async function handleTailoring(jobDescription: string) {
       try {
         const shortened = await shortenBullets(deadZone, 88);
         const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
+        // Collect bullets still in dead zone after shortening attempt
+        const stillDead: TailoredBullet[] = [];
         for (const b of tailoredBullets) {
           const short = shortenedMap.get(b.id);
           if (short && short.length <= 88) {
             b.tailoredText = short;
           } else if (short && short.length >= DEAD_ZONE_MIN && short.length <= DEAD_ZONE_MAX) {
-            // Still in dead zone — revert to original
-            const orig = origMap.get(b.id);
-            if (orig) {
-              console.log(`[CV Tailor] Reverted dead-zone bullet ${b.id}: ${short.length} chars after retry`);
-              b.tailoredText = orig;
+            // Still in dead zone — keep tailored content, try expanding to 2 lines
+            stillDead.push({ id: b.id, tailoredText: short });
+          }
+        }
+        // Second pass: expand dead-zone survivors to 160-176 chars (2 lines) instead of reverting
+        if (stillDead.length > 0) {
+          console.log(`[CV Tailor] ${stillDead.length} bullets still in dead zone, expanding to 2 lines`);
+          try {
+            const expanded = await expandBullets(stillDead, 160, MAX_BULLET_LEN);
+            const expandedMap = new Map(expanded.map((b) => [b.id, b.tailoredText]));
+            for (const b of tailoredBullets) {
+              const exp = expandedMap.get(b.id);
+              if (exp && (exp.length <= 88 || (exp.length >= 160 && exp.length <= MAX_BULLET_LEN))) {
+                b.tailoredText = exp;
+              } else if (exp && exp.length >= DEAD_ZONE_MIN && exp.length <= DEAD_ZONE_MAX) {
+                // Still stuck — revert as last resort
+                const orig = origMap.get(b.id);
+                if (orig) {
+                  console.log(`[CV Tailor] Reverted dead-zone bullet ${b.id}: ${exp.length} chars after expand`);
+                  b.tailoredText = orig;
+                }
+              }
+            }
+          } catch (err) {
+            console.log("[CV Tailor] dead-zone expand failed, reverting:", err);
+            for (const b of stillDead) {
+              const orig = origMap.get(b.id);
+              if (orig) b.tailoredText = orig;
             }
           }
         }
@@ -280,9 +336,10 @@ async function handleTailoring(jobDescription: string) {
 
     let modifiedTex = replaceBulletsInTex(rawTex, expBullets, tailoredMap);
 
-    // Tailor skills: add missing JD skills + reorder
+    // Tailor skills: add missing JD skills + reorder (unless user disabled it)
+    const tailorSkillsEnabled = await getTailorSkills();
     const skillsSection = resume.sections.find((s) => s.type === "skills");
-    if (skillsSection?.entries[0]?.skillLines) {
+    if (tailorSkillsEnabled && skillsSection?.entries[0]?.skillLines) {
       await progress("Tailoring skills...", 65);
       const tailoredSkills = await tailorSkills(
         jobDescription,
