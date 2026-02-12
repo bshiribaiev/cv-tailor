@@ -74,30 +74,44 @@ KEYWORD INTEGRATION RULES:
 - Distribute JD keywords across modified bullets — don't cluster the same keyword in every one
 - Candidate's signature skills: ${alwaysIncludeSkills.join(", ")}. Include ONLY when relevant to the JD domain. If a skill doesn't appear in or relate to the JD (e.g., Spring Boot for an embedded role, Next.js for a systems role), do NOT mention it at all. JD-specific keywords ALWAYS take absolute priority over this list.
 
+TECH RELEVANCE FILTER (apply before writing):
+- For every technology you're about to mention, ask: "Would the hiring manager for THIS role care about this?" If no, DROP it or replace with the transferable concept/outcome.
+- Do NOT repeat the same technology name across multiple bullets. Mention a technology at most ONCE across all bullets. If 3 bullets used Python, mention Python in the strongest bullet and describe the other 2 via outcomes and transferable concepts.
+- Do NOT repeat the same noun phrase (e.g., "data pipeline") across multiple bullets. Use synonyms or describe the work differently.
+
 TRANSFERABLE SKILLS (when JD domain differs from experience):
-- When the JD domain differs (e.g., embedded JD vs web experience), highlight transferable CONCEPTS: performance optimization, debugging, system design, data pipelines, testing methodology.
-- Emphasize aspects of existing work that align with JD values, but keep the original tech stack honest. If the work used Python and Express.js, say so — don't pretend it was C++.
+- When the JD domain differs (e.g., embedded JD vs web experience), highlight transferable CONCEPTS: performance optimization, debugging, system design, data processing, testing methodology, system validation.
+- You can mention the original tech briefly, but lead with the transferable concept. Instead of "Built Python data pipeline", write "Designed automated data processing system in Python" — the concept leads, the tech follows.
 - You MAY add "on Linux" to deployment/infra bullets when the work plausibly ran on Linux (cloud, Docker, servers).
 - The candidate's SKILLS section lists what they actually know. If a JD skill appears in the candidate's skills (e.g., C++, Linux), ACTIVELY weave it into bullets where the work context supports it — these are real skills, not fabrications. Prioritize JD skills the candidate actually knows over generic reframing.
 
 EMBEDDED / SYSTEMS / LOW-LEVEL ROLE MAPPING (use when JD mentions embedded, RTOS, firmware, QEMU, kernel, hardware, drivers, or similar):
-- These roles value FUNDAMENTALS over frameworks. Emphasize: C/C++, Linux, debugging, performance optimization, memory management, system architecture. Do NOT mention web frameworks (React, Express, Spring Boot, Next.js) unless the original bullet's core work is inseparable from them.
+- These roles value FUNDAMENTALS over frameworks. Emphasize: C/C++, Linux, debugging, performance optimization, memory management, system architecture.
+- ACTIVELY SUPPRESS web-specific tech: React, Express, WebSocket, Node.js, Spring Boot, Next.js — DROP these entirely unless the bullet makes no sense without them. Replace with the underlying concept: "WebSocket real-time communication" → "real-time message processing", "React hooks" → "component architecture", or just omit.
+- JD KEYWORD COVERAGE IS THE PRIORITY: Before finalizing, check that major JD skills and concepts are represented across the bullet set. If important JD keywords (e.g., C++, Linux, debugging, system architecture, virtualization) are missing while non-JD tech repeats across bullets, replace some non-JD tech mentions with JD-relevant concepts.
 - If the candidate's skills include C++, Linux, or other JD-relevant systems skills, weave them prominently. These are real skills — treat them as primary, not secondary.
-- Highlight transferable concepts WITHOUT faking the tech:
+- Reframe using systems/embedded vocabulary:
   "optimized API latency" → "optimized system performance", "deployed to cloud" → "deployed on Linux",
-  "CI/CD pipeline" → "build and validation pipeline", "load testing" → "system validation and stress testing"
+  "CI/CD pipeline" → "build and validation pipeline", "load testing" → "system validation and stress testing",
+  "microservice" → "modular service architecture", "REST API" → "interface layer"
 - Do NOT map web concepts to hardware-specific terms the candidate didn't use. Specifically:
   Do NOT add "serial communication", "UART", "I2C", "SPI", "memory-mapped I/O", "circular buffer", "RTOS", "board support" unless the original bullet already describes that kind of work.
-  "WebSocket" is NOT "serial communication". "Docker" is NOT "QEMU virtualization". "JSON parsing" is NOT "data serialization protocol". These are different technologies.
 - INTERVIEW TEST: For every bullet, ask "Could the candidate explain this in a 2-minute interview answer without lying?" If no, you've gone too far. Pull back to what actually happened, described in JD-friendly language.
+
+BULLET STRUCTURE (Google XYZ format — follow for EVERY bullet):
+- Format: "Accomplished [X] as measured by [Y], by doing [Z]"
+- X = what you did/built, Y = measurable result (metric, %, $, time saved), Z = how you did it (tools, methods, approach)
+- Every bullet MUST have all three components. If the original bullet has a metric, preserve it as Y. If it doesn't, Y can be a qualitative outcome (e.g., "improving reliability", "enabling real-time updates").
+- The X-Y-Z order can be flexible (Z-X-Y or X-Z-Y are fine) but all three parts must be present.
+- Examples: "Reduced system latency from 300ms to 100ms by implementing load balancing and caching on Linux" (X=reduced latency, Y=300ms to 100ms, Z=load balancing and caching on Linux)
 
 WRITING QUALITY RULES (critical):
 - NEVER use em dashes (—) or en dashes (–). Use regular hyphens (-) or commas instead. Em dashes signal LLM-generated text.
 - NEVER repeat the same sentence structure or connective pattern across bullets. E.g., if one bullet ends with "- saving X", don't end another with "- saved Y".
 - NEVER repeat the same adjective or filler word across bullets
 - Use a UNIQUE action verb for each bullet. NEVER repeat the same leading verb across bullets. Rotate through: built, engineered, developed, implemented, designed, automated, optimized, deployed, integrated, delivered, architected, streamlined, established, reduced, migrated, created, accelerated. If you've used "built" once, do NOT use it again.
-- PRESERVE specific technical details from the original (deployment targets, infrastructure, cloud providers, specific tools like python-pptx, AWS SES, etc.). Only swap a technology for its JD-equivalent — keep everything else.
-- Do NOT replace specific tech (e.g., "Google Cloud Run", "AWS S3", "Gemini API") with vague terms (e.g., "cloud", "API integration"). Keep the original specifics unless swapping for a JD equivalent.
+- PRESERVE specific technical details that the hiring manager would care about (deployment targets, infrastructure, metrics). Drop tech names irrelevant to the JD domain — specificity matters only when it's relevant specificity.
+- Do NOT replace JD-relevant specific tech with vague terms. But DO drop or generalize JD-irrelevant tech (e.g., for an embedded role, "Express.js REST APIs" → "service interface layer").
 - Do NOT pad bullets with filler phrases like "documented for n-tier architecture" or "featuring optimized rendering". Keep it tight.
 - Weave JD keywords NATURALLY into the sentence — don't just append "within Agile" or similar
 - Maintain logical cause-and-effect: JD keywords should describe HOW the work was done, not be tacked onto unrelated outcomes. E.g., "reducing latency through Git" is wrong — Git doesn't reduce latency.
