@@ -10,6 +10,8 @@ const KEYS = {
   anthropicModel: "anthropic_model",
   rawTex: "raw_tex",
   parsedResume: "parsed_resume",
+  tailorSkills: "tailor_skills",
+  customInstructions: "custom_instructions",
 } as const;
 
 export const DEFAULT_MODEL = "gemini-2.5-flash";
@@ -83,6 +85,26 @@ export async function getResume(): Promise<{
     rawTex: result[KEYS.rawTex] as string,
     parsed: result[KEYS.parsedResume] as Resume,
   };
+}
+
+/** Whether to tailor the Skills section (default true). When false, skills are left unchanged. */
+export async function getTailorSkills(): Promise<boolean> {
+  const result = await chrome.storage.local.get(KEYS.tailorSkills);
+  return result[KEYS.tailorSkills] !== false; // default true
+}
+
+export async function saveTailorSkills(value: boolean): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.tailorSkills]: value });
+}
+
+/** User-provided custom instructions passed to the LLM (e.g. "Don't touch Projects, keep Experience minimal"). */
+export async function getCustomInstructions(): Promise<string> {
+  const result = await chrome.storage.local.get(KEYS.customInstructions);
+  return (result[KEYS.customInstructions] as string) ?? "";
+}
+
+export async function saveCustomInstructions(value: string): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.customInstructions]: (value ?? "").trim() });
 }
 
 export async function saveTailoringState(state: {

@@ -13,6 +13,10 @@ import {
   getProvider,
   saveResume,
   getResume,
+  getTailorSkills,
+  saveTailorSkills,
+  getCustomInstructions,
+  saveCustomInstructions,
   DEFAULT_MODEL,
   DEFAULT_ANTHROPIC_MODEL,
 } from "../shared/storage";
@@ -33,6 +37,8 @@ export function App() {
   const [parsedResume, setParsedResume] = useState<Resume | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [tailorSkills, setTailorSkills] = useState(true);
+  const [customInstructions, setCustomInstructions] = useState("");
 
   useEffect(() => {
     getProvider().then(setProviderState);
@@ -50,6 +56,8 @@ export function App() {
         setParsedResume(data.parsed);
       }
     });
+    getTailorSkills().then(setTailorSkills);
+    getCustomInstructions().then(setCustomInstructions);
   }, []);
 
   // Reset API key status when switching providers
@@ -269,6 +277,45 @@ export function App() {
             <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
           </select>
         )}
+      </section>
+
+      {/* Tailoring Preferences */}
+      <section class="mb-8">
+        <h2 class="text-lg font-semibold mb-3">Tailoring Preferences</h2>
+        <div class="space-y-3">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={tailorSkills}
+              onChange={async (e) => {
+                const val = (e.target as HTMLInputElement).checked;
+                setTailorSkills(val);
+                await saveTailorSkills(val);
+              }}
+              class="rounded"
+            />
+            <span class="text-sm">Tailor Skills section</span>
+          </label>
+          <p class="text-xs text-gray-500">
+            When unchecked, the Skills section is left unchanged. Use this if you want to keep Projects and Skills untouched and only tailor Experience bullets.
+          </p>
+          <div>
+            <label class="block text-sm font-medium mb-1">Custom instructions (optional)</label>
+            <textarea
+              value={customInstructions}
+              onInput={async (e) => {
+                const val = (e.target as HTMLTextAreaElement).value;
+                setCustomInstructions(val);
+                await saveCustomInstructions(val);
+              }}
+              placeholder='e.g. "Do not touch Projects or Skills. Keep Experience bullets minimal."'
+              class="w-full h-20 px-3 py-2 border rounded text-sm"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Passed to the AI when tailoring. Use for constraints like "Don't add QEMU if not in original work" or "Prioritize embedded keywords".
+            </p>
+          </div>
+        </div>
       </section>
 
       {/* Resume Upload */}
