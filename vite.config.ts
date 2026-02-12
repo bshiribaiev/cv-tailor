@@ -12,7 +12,6 @@ export default defineConfig({
         popup: "src/popup/index.html",
         options: "src/options/index.html",
       },
-      external: ["html2canvas"],
     },
   },
 });

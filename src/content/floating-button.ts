@@ -1,5 +1,7 @@
 /** Content script auto-injected on job sites — edge tab that auto-expands on complete */
 
+import { extractJobDescription } from "./extractor";
+
 // Internal state
 let currentState: "idle" | "extracting" | "tailoring" | "done" | "error" = "idle";
 let currentStage = "";
@@ -188,7 +190,7 @@ function init() {
         return;
       }
 
-      const jd = extractJD();
+      const jd = extractJobDescription();
       if (!jd.description || jd.description.length < 50) {
         currentState = "error";
         currentError = "Could not extract job description from this page.";
@@ -293,81 +295,6 @@ function init() {
       handleProgress(state.stage, state.pct);
     }
   });
-}
-
-function extractJD(): { title: string; company: string; description: string } {
-  const host = window.location.hostname;
-
-  if (host.includes("linkedin.com")) {
-    const desc =
-      document.querySelector<HTMLElement>(".jobs-description-content__text") ??
-      document.querySelector<HTMLElement>(".description__text") ??
-      document.querySelector<HTMLElement>('[class*="jobs-description"]');
-    if (desc) {
-      const title =
-        document.querySelector<HTMLElement>(".job-details-jobs-unified-top-card__job-title") ??
-        document.querySelector<HTMLElement>("h1");
-      const company =
-        document.querySelector<HTMLElement>(".job-details-jobs-unified-top-card__company-name");
-      return {
-        title: title?.textContent?.trim() ?? "",
-        company: company?.textContent?.trim() ?? "",
-        description: desc.innerText.trim(),
-      };
-    }
-  }
-
-  if (host.includes("greenhouse.io")) {
-    const desc = document.querySelector<HTMLElement>("#content");
-    if (desc) {
-      return {
-        title: document.querySelector<HTMLElement>(".app-title")?.textContent?.trim() ?? "",
-        company: document.querySelector<HTMLElement>(".company-name")?.textContent?.trim() ?? "",
-        description: desc.innerText.trim(),
-      };
-    }
-  }
-
-  if (host.includes("lever.co")) {
-    const desc = document.querySelector<HTMLElement>(".section-wrapper.page-full-width");
-    if (desc) {
-      return {
-        title: document.querySelector<HTMLElement>(".posting-headline h2")?.textContent?.trim() ?? "",
-        company: "",
-        description: desc.innerText.trim(),
-      };
-    }
-  }
-
-  if (host.includes("workday.com") || host.includes("myworkday")) {
-    const desc = document.querySelector<HTMLElement>('[data-automation-id="jobPostingDescription"]');
-    if (desc) {
-      return {
-        title: document.querySelector<HTMLElement>('[data-automation-id="jobPostingHeader"]')?.textContent?.trim() ?? "",
-        company: "",
-        description: desc.innerText.trim(),
-      };
-    }
-  }
-
-  // Generic
-  const candidates = document.querySelectorAll<HTMLElement>(
-    "article, main, [role='main'], .content, .job-description, .description, #content",
-  );
-  let best: HTMLElement | null = null;
-  let bestLen = 0;
-  for (const el of candidates) {
-    if (el.innerText.length > bestLen) {
-      bestLen = el.innerText.length;
-      best = el;
-    }
-  }
-
-  return {
-    title: document.querySelector<HTMLElement>("h1")?.textContent?.trim() ?? document.title,
-    company: "",
-    description: best?.innerText?.trim() ?? document.body.innerText.slice(0, 5000),
-  };
 }
 
 init();
