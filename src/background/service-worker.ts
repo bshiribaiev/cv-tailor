@@ -1,6 +1,8 @@
 import type { Message } from "../shared/messages";
 import {
+  getProvider,
   getApiKey,
+  getAnthropicApiKey,
   getResume,
   saveTailoringState,
   clearTailoringState,
@@ -28,7 +30,7 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
     if (message.type === "TEST_API_KEY") {
-      testApiKey(message.payload.apiKey).then(sendResponse);
+      testApiKey(message.payload.apiKey, message.payload.provider).then(sendResponse);
       return true;
     }
     if (message.type === "START_TAILORING") {
@@ -43,7 +45,10 @@ chrome.runtime.onMessage.addListener(
 );
 
 async function handleGetStatus() {
-  const apiKey = await getApiKey();
+  const provider = await getProvider();
+  const apiKey = provider === "anthropic"
+    ? await getAnthropicApiKey()
+    : await getApiKey();
   const resume = await getResume();
   return {
     type: "STATUS_RESULT" as const,
@@ -170,9 +175,6 @@ async function handleTailoring(jobDescription: string) {
     await clearTailoringState();
     await progress("Preparing...", 10);
 
-    const apiKey = await getApiKey();
-    if (!apiKey) throw new Error("No API key configured");
-
     const resumeData = await getResume();
     if (!resumeData) throw new Error("No resume uploaded");
 
@@ -194,22 +196,29 @@ async function handleTailoring(jobDescription: string) {
     await progress("Tailoring experience...", 30);
 
     const tailoredBullets = await tailorBullets(
-      apiKey,
       jobDescription,
       expBullets,
       ALWAYS_INCLUDE_SKILLS,
     );
 
-    // Post-process: only enforce max length (176 chars = 2 lines)
-    // Bullets ≤176 are accepted as-is (dead zone removed — originals already have 89-159 char bullets)
-    const MAX_BULLET_LEN = 176;
+    // Fill in any missing tailoredText with originals
     const origMap = new Map(expBullets.map((b) => [b.id, b.originalText]));
+    for (const b of tailoredBullets) {
+      if (!b.tailoredText) {
+        console.log(`[CV Tailor] Missing tailoredText for ${b.id}, using original`);
+        b.tailoredText = origMap.get(b.id) ?? "";
+      }
+    }
+
+    // Post-process: only enforce max length (176 chars = 2 lines)
+    const MAX_BULLET_LEN = 176;
     const tooLong = tailoredBullets.filter((b) => b.tailoredText.length > MAX_BULLET_LEN);
 
     if (tooLong.length > 0) {
       console.log(`[CV Tailor] ${tooLong.length} bullets over ${MAX_BULLET_LEN} chars, requesting shorter versions`);
+      await progress("Shortening long bullets...", 45);
       try {
-        const shortened = await shortenBullets(apiKey, tooLong, MAX_BULLET_LEN);
+        const shortened = await shortenBullets(tooLong, MAX_BULLET_LEN);
         const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
         for (const b of tailoredBullets) {
           const short = shortenedMap.get(b.id);
@@ -232,6 +241,37 @@ async function handleTailoring(jobDescription: string) {
       }
     }
 
+    // Post-process: fix dead-zone bullets (89-159 chars cause ugly wrapping)
+    const DEAD_ZONE_MIN = 89;
+    const DEAD_ZONE_MAX = 159;
+    const deadZone = tailoredBullets.filter(
+      (b) => b.tailoredText.length >= DEAD_ZONE_MIN && b.tailoredText.length <= DEAD_ZONE_MAX,
+    );
+
+    if (deadZone.length > 0) {
+      console.log(`[CV Tailor] ${deadZone.length} bullets in dead zone (${DEAD_ZONE_MIN}-${DEAD_ZONE_MAX} chars), shortening to ≤88`);
+      await progress("Fixing line wrapping...", 50);
+      try {
+        const shortened = await shortenBullets(deadZone, 88);
+        const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
+        for (const b of tailoredBullets) {
+          const short = shortenedMap.get(b.id);
+          if (short && short.length <= 88) {
+            b.tailoredText = short;
+          } else if (short && short.length >= DEAD_ZONE_MIN && short.length <= DEAD_ZONE_MAX) {
+            // Still in dead zone — revert to original
+            const orig = origMap.get(b.id);
+            if (orig) {
+              console.log(`[CV Tailor] Reverted dead-zone bullet ${b.id}: ${short.length} chars after retry`);
+              b.tailoredText = orig;
+            }
+          }
+        }
+      } catch (err) {
+        console.log("[CV Tailor] dead-zone shortenBullets failed:", err);
+      }
+    }
+
     const tailoredMap = new Map(
       tailoredBullets.map((b) => [b.id, b.tailoredText]),
     );
@@ -245,7 +285,6 @@ async function handleTailoring(jobDescription: string) {
     if (skillsSection?.entries[0]?.skillLines) {
       await progress("Tailoring skills...", 65);
       const tailoredSkills = await tailorSkills(
-        apiKey,
         jobDescription,
         skillsSection.entries[0].skillLines,
         ALWAYS_INCLUDE_SKILLS,

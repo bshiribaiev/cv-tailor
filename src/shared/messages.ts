@@ -15,7 +15,7 @@ export type Message =
       };
     }
   | { type: "TAILORING_ERROR"; payload: { error: string } }
-  | { type: "TEST_API_KEY"; payload: { apiKey: string } }
+  | { type: "TEST_API_KEY"; payload: { apiKey: string; provider: "gemini" | "anthropic" } }
   | { type: "GET_STATUS" }
   | { type: "OPEN_OPTIONS" }
   | {

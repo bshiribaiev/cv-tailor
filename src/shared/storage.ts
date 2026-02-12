@@ -1,13 +1,28 @@
 import type { Resume } from "../parser/types";
 
+export type Provider = "gemini" | "anthropic";
+
 const KEYS = {
+  provider: "llm_provider",
   apiKey: "gemini_api_key",
   model: "gemini_model",
+  anthropicApiKey: "anthropic_api_key",
+  anthropicModel: "anthropic_model",
   rawTex: "raw_tex",
   parsedResume: "parsed_resume",
 } as const;
 
 export const DEFAULT_MODEL = "gemini-2.5-flash";
+export const DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001";
+
+export async function saveProvider(provider: Provider): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.provider]: provider });
+}
+
+export async function getProvider(): Promise<Provider> {
+  const result = await chrome.storage.local.get(KEYS.provider);
+  return (result[KEYS.provider] as Provider) ?? "gemini";
+}
 
 export async function saveApiKey(key: string): Promise<void> {
   await chrome.storage.local.set({ [KEYS.apiKey]: key });
@@ -25,6 +40,24 @@ export async function saveModel(model: string): Promise<void> {
 export async function getModel(): Promise<string> {
   const result = await chrome.storage.local.get(KEYS.model);
   return (result[KEYS.model] as string) ?? DEFAULT_MODEL;
+}
+
+export async function saveAnthropicApiKey(key: string): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.anthropicApiKey]: key });
+}
+
+export async function getAnthropicApiKey(): Promise<string | null> {
+  const result = await chrome.storage.local.get(KEYS.anthropicApiKey);
+  return (result[KEYS.anthropicApiKey] as string) ?? null;
+}
+
+export async function saveAnthropicModel(model: string): Promise<void> {
+  await chrome.storage.local.set({ [KEYS.anthropicModel]: model });
+}
+
+export async function getAnthropicModel(): Promise<string> {
+  const result = await chrome.storage.local.get(KEYS.anthropicModel);
+  return (result[KEYS.anthropicModel] as string) ?? DEFAULT_ANTHROPIC_MODEL;
 }
 
 export async function saveResume(

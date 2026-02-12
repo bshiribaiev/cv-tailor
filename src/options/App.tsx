@@ -5,33 +5,45 @@ import {
   getApiKey,
   saveModel,
   getModel,
+  saveAnthropicApiKey,
+  getAnthropicApiKey,
+  saveAnthropicModel,
+  getAnthropicModel,
+  saveProvider,
+  getProvider,
   saveResume,
   getResume,
   DEFAULT_MODEL,
+  DEFAULT_ANTHROPIC_MODEL,
 } from "../shared/storage";
+import type { Provider } from "../shared/storage";
 import type { Resume } from "../parser/types";
 
 export function App() {
+  const [provider, setProviderState] = useState<Provider>("gemini");
   const [apiKey, setApiKey] = useState("");
+  const [anthropicApiKey, setAnthropicApiKey] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState<
     "idle" | "testing" | "valid" | "invalid"
   >("idle");
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
   const [model, setModel] = useState(DEFAULT_MODEL);
+  const [anthropicModel, setAnthropicModel] = useState(DEFAULT_ANTHROPIC_MODEL);
   const [texContent, setTexContent] = useState("");
   const [parsedResume, setParsedResume] = useState<Resume | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    // Load existing data
+    getProvider().then(setProviderState);
     getApiKey().then((key) => {
-      if (key) {
-        setApiKey(key);
-        setApiKeyStatus("valid");
-      }
+      if (key) setApiKey(key);
+    });
+    getAnthropicApiKey().then((key) => {
+      if (key) setAnthropicApiKey(key);
     });
     getModel().then(setModel);
+    getAnthropicModel().then(setAnthropicModel);
     getResume().then((data) => {
       if (data) {
         setTexContent(data.rawTex);
@@ -40,13 +52,32 @@ export function App() {
     });
   }, []);
 
+  // Reset API key status when switching providers
+  useEffect(() => {
+    const currentKey = provider === "anthropic" ? anthropicApiKey : apiKey;
+    setApiKeyStatus(currentKey ? "valid" : "idle");
+    setApiKeyError(null);
+  }, [provider]);
+
+  async function handleProviderChange(p: Provider) {
+    setProviderState(p);
+    await saveProvider(p);
+  }
+
   async function handleSaveApiKey() {
-    await saveApiKey(apiKey);
+    const isAnthropic = provider === "anthropic";
+    const key = isAnthropic ? anthropicApiKey : apiKey;
+
+    if (isAnthropic) {
+      await saveAnthropicApiKey(key);
+    } else {
+      await saveApiKey(key);
+    }
+
     setApiKeyStatus("testing");
     setApiKeyError(null);
-    // Route test through service worker (has host_permissions)
     chrome.runtime.sendMessage(
-      { type: "TEST_API_KEY", payload: { apiKey } },
+      { type: "TEST_API_KEY", payload: { apiKey: key, provider } },
       (res) => {
         if (res?.valid) {
           setApiKeyStatus("valid");
@@ -78,7 +109,6 @@ export function App() {
       setParsedResume(resume);
       setParseError(null);
 
-      // Count bullets
       let bulletCount = 0;
       for (const section of resume.sections) {
         for (const entry of section.entries) {
@@ -109,19 +139,60 @@ export function App() {
     return count;
   }
 
+  const currentKey = provider === "anthropic" ? anthropicApiKey : apiKey;
+
   return (
     <div class="max-w-2xl mx-auto p-6 bg-white">
       <h1 class="text-2xl font-bold mb-6">CV Tailor Settings</h1>
 
+      {/* Provider Selection */}
+      <section class="mb-8">
+        <h2 class="text-lg font-semibold mb-3">AI Provider</h2>
+        <div class="flex gap-2">
+          <button
+            onClick={() => handleProviderChange("gemini")}
+            class={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              provider === "gemini"
+                ? "bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Gemini
+          </button>
+          <button
+            onClick={() => handleProviderChange("anthropic")}
+            class={`px-4 py-2 rounded text-sm font-medium transition-colors ${
+              provider === "anthropic"
+                ? "bg-blue-600 text-white ring-2 ring-blue-600 ring-offset-2"
+                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            Claude (Anthropic)
+          </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-2">
+          Active: <span class="font-semibold text-gray-700">{provider === "anthropic" ? "Claude (Anthropic)" : "Gemini"}</span> — all tailoring will use this provider
+        </p>
+      </section>
+
       {/* API Key */}
       <section class="mb-8">
-        <h2 class="text-lg font-semibold mb-3">Gemini API Key</h2>
+        <h2 class="text-lg font-semibold mb-3">
+          {provider === "anthropic" ? "Anthropic" : "Gemini"} API Key
+        </h2>
         <div class="flex gap-2">
           <input
             type="password"
-            value={apiKey}
-            onInput={(e) => setApiKey((e.target as HTMLInputElement).value)}
-            placeholder="Enter your Gemini API key"
+            value={currentKey}
+            onInput={(e) => {
+              const val = (e.target as HTMLInputElement).value;
+              if (provider === "anthropic") {
+                setAnthropicApiKey(val);
+              } else {
+                setApiKey(val);
+              }
+            }}
+            placeholder={`Enter your ${provider === "anthropic" ? "Anthropic" : "Gemini"} API key`}
             class="flex-1 px-3 py-2 border rounded text-sm"
           />
           <button
@@ -141,13 +212,23 @@ export function App() {
           <div class="text-sm text-red-600 mt-1">
             <p>
               API key test failed. Get one at{" "}
-              <a
-                href="https://aistudio.google.com/apikey"
-                target="_blank"
-                class="underline"
-              >
-                aistudio.google.com
-              </a>
+              {provider === "anthropic" ? (
+                <a
+                  href="https://console.anthropic.com/settings/keys"
+                  target="_blank"
+                  class="underline"
+                >
+                  console.anthropic.com
+                </a>
+              ) : (
+                <a
+                  href="https://aistudio.google.com/apikey"
+                  target="_blank"
+                  class="underline"
+                >
+                  aistudio.google.com
+                </a>
+              )}
             </p>
             {apiKeyError && (
               <p class="text-xs text-gray-500 mt-1">Error: {apiKeyError}</p>
@@ -158,21 +239,36 @@ export function App() {
 
       {/* Model Selection */}
       <section class="mb-8">
-        <h2 class="text-lg font-semibold mb-3">Gemini Model</h2>
-        <select
-          value={model}
-          onChange={async (e) => {
-            const val = (e.target as HTMLSelectElement).value;
-            setModel(val);
-            await saveModel(val);
-          }}
-          class="px-3 py-2 border rounded text-sm"
-        >
-          <option value="gemini-2.5-flash">Gemini 2.5 Flash (recommended)</option>
-          <option value="gemini-3-flash-preview">Gemini 3 Flash (preview)</option>
-          <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-          <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite (fastest)</option>
-        </select>
+        <h2 class="text-lg font-semibold mb-3">Model</h2>
+        {provider === "anthropic" ? (
+          <select
+            value={anthropicModel}
+            onChange={async (e) => {
+              const val = (e.target as HTMLSelectElement).value;
+              setAnthropicModel(val);
+              await saveAnthropicModel(val);
+            }}
+            class="px-3 py-2 border rounded text-sm"
+          >
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5 (fastest, recommended)</option>
+            <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5</option>
+          </select>
+        ) : (
+          <select
+            value={model}
+            onChange={async (e) => {
+              const val = (e.target as HTMLSelectElement).value;
+              setModel(val);
+              await saveModel(val);
+            }}
+            class="px-3 py-2 border rounded text-sm"
+          >
+            <option value="gemini-2.0-flash">Gemini 2.0 Flash (fastest, recommended)</option>
+            <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+            <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
+            <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+          </select>
+        )}
       </section>
 
       {/* Resume Upload */}

@@ -87,15 +87,11 @@ function init() {
     tab.style.background = currentState === "tailoring" ? "#f59e0b" : "#2563eb";
   });
 
-  // Click tab → expand panel + start tailoring if idle
+  // Click tab → expand panel (never auto-start)
   tab.addEventListener("click", () => {
     tab.style.display = "none";
     panel.style.display = "block";
-    if (currentState === "idle") {
-      startTailoring();
-    } else {
-      renderBody();
-    }
+    renderBody();
   });
 
   // Collapse
@@ -111,7 +107,15 @@ function init() {
 
   function renderBody() {
     if (currentState === "idle") {
-      body.innerHTML = `<p style="margin:0;color:#666;font-size:12px;">Ready to tailor.</p>`;
+      body.innerHTML = `
+        <button id="cv-tailor-start" style="
+          width:100%;padding:10px;background:#2563eb;color:white;border:none;
+          border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;
+        ">Tailor Resume</button>
+      `;
+      document.getElementById("cv-tailor-start")?.addEventListener("click", () => {
+        startTailoring();
+      });
     } else if (currentState === "extracting" || currentState === "tailoring") {
       body.innerHTML = `
         <p style="margin:0 0 8px 0;font-size:13px;">${currentStage || "Processing..."}</p>
@@ -139,9 +143,7 @@ function init() {
       document.getElementById("cv-tailor-again")?.addEventListener("click", () => {
         currentState = "idle";
         currentPayload = null;
-        panel.style.display = "none";
-        tab.style.display = "flex";
-        tab.style.background = "#2563eb";
+        renderBody();
       });
     } else if (currentState === "error") {
       body.innerHTML = `
