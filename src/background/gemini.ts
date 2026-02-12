@@ -27,6 +27,8 @@ export async function tailorBullets(
   alwaysIncludeSkills: string[],
   candidateSkills: string = "",
   customInstructions: string = "",
+  jobTitle: string = "",
+  company: string = "",
 ): Promise<TailoredBullet[]> {
   const bulletsWithLen = bullets.map((b) => ({
     id: b.id,
@@ -34,21 +36,38 @@ export async function tailorBullets(
     chars: b.originalText.length,
   }));
 
-  const prompt = `You are an expert resume tailoring assistant. Maximize keyword overlap between resume bullets and the job description while keeping bullets SHORT.
+  // Derive hiring manager persona from JD
+  const jdLower = jobDescription.toLowerCase();
+  const persona = jdLower.includes("senior engineer") || jdLower.includes("sr. engineer") || jdLower.includes("staff engineer")
+    ? "senior engineer"
+    : jdLower.includes("team lead") || jdLower.includes("tech lead")
+      ? "engineering team lead"
+      : "engineering manager";
 
-STEP 1 — EXTRACT ALL JD KEYWORDS in these categories:
-- Hard skills: languages, frameworks, databases, tools (e.g., Java, Spring Boot, MySQL, BitBucket, QEMU, GDB, Valgrind)
-- Process keywords: methodologies, practices (e.g., testing, code review, documentation, Agile, CI/CD, debugging, validation)
-- Domain keywords: industry terms, concepts (e.g., microservices, REST APIs, data pipelines, embedded systems, RTOS, virtualization, memory mapping, serial communication, board support packages)
+  const roleCtx = jobTitle && company
+    ? `a ${persona} at ${company} hiring for "${jobTitle}"`
+    : jobTitle
+      ? `a ${persona} hiring for "${jobTitle}"`
+      : company
+        ? `a ${persona} at ${company}`
+        : `a ${persona}`;
 
-STEP 2 — REWRITE EACH BULLET to incorporate JD keywords:
+  const prompt = `STEP 1 — HIRING MANAGER CRITIQUE:
+You are ${roleCtx}. Review this candidate's resume bullets against the job description below. Be specific:
+- What's strong? Which bullets already align well with what you need?
+- What's missing? Which JD requirements have no coverage?
+- What feels irrelevant or would you skip reading?
+- What would you want to see more of?
+
+STEP 2 — TAILOR BASED ON YOUR CRITIQUE:
+Now rewrite the bullets to address the gaps you identified. Use JD language where the underlying work supports it.
 
 KEYWORD INTEGRATION RULES:
-- BE AGGRESSIVE. Maximize TOTAL JD keyword coverage across all bullets. If important JD keywords are still missing after your first pass, go back and weave them into bullets that haven't been modified yet. A bullet can stay unchanged only if the remaining JD keywords genuinely don't fit it AND other bullets already cover them.
+- Maximize keyword coverage where the underlying work SUPPORTS it. Every bullet should use JD language where the original work naturally maps, but don't force keywords into bullets where the connection is a stretch. A bullet can stay lightly modified if the remaining JD keywords don't genuinely relate to that work.
 - REFRAME the work to match JD language. E.g., if JD says "data pipelines" and bullet describes a reporting pipeline, call it a "data pipeline". If JD says "quality control workflows" and bullet describes QA validation, call it a "quality control workflow".
-- You MUST swap technologies for JD equivalents when the underlying work is similar:
-  PostgreSQL→MySQL, Express.js→Spring Boot, GitHub→BitBucket, any DB→the JD's DB, etc.
-- When swapping tech, swap to the SAME specificity level. Don't replace "React/TypeScript" with just "JavaScript" — use "React with JavaScript" or keep the original. Generic terms are LESS impressive than specific ones.
+- Swap technologies for JD equivalents ONLY within the same category: DB→DB (PostgreSQL→MySQL), VCS→VCS (GitHub→BitBucket), web framework→web framework (Express→Spring Boot).
+- NEVER swap across categories (e.g., React→C++, Express.js→embedded). If the JD domain differs from the work, reframe the CONCEPTS and outcomes, not the tech stack.
+- Keep the same specificity level. Don't replace "React/TypeScript" with just "JavaScript".
 - Use JD domain language to DESCRIBE existing work. If JD mentions "JSON transformation", "admin dashboards", "bulk operations", "workflow management", "serverless" — reword bullets to use those exact phrases where the underlying work supports it.
 - You MAY add brief process context ONLY if it fits naturally and doesn't bloat the bullet
 - Process keywords (testing, code reviews, Agile) must be CAUSALLY related to the action. "Reducing latency via code reviews" is WRONG — code reviews don't reduce latency. Instead: "Built X with unit testing and code reviews" is correct.
@@ -56,26 +75,20 @@ KEYWORD INTEGRATION RULES:
 - These skills should appear across bullets if relevant, but JD-specific keywords take PRIORITY over these: ${alwaysIncludeSkills.join(", ")}
 
 TRANSFERABLE SKILLS (when JD domain differs from experience):
-- When the JD domain is different (e.g., embedded systems JD vs web dev experience), DON'T just give up. Reframe bullets using TRANSFERABLE CONCEPTS the JD values.
-- Map experience concepts to JD language: "reduced API latency" → "debugged and optimized system performance", "deployed microservice" → "architected and deployed system on Linux", "data validation" → "validation and debugging pipeline", "automated pipeline" → "automated system pipeline on Linux".
-- Emphasize aspects of the work that align with JD values. If JD values debugging, performance, system architecture, Linux, C/C++ — highlight those aspects of existing work even if the original bullet didn't emphasize them.
-- You MAY shift tech emphasis: if original says "Express.js/PostgreSQL" but JD wants C/C++, swap to C++ if the candidate lists C++ in skills. Only swap to languages/tools the candidate actually knows (listed in their skills or other bullets).
-- Add "on Linux" or "in Linux environment" to deployment/infra bullets when JD requires Linux and the work plausibly ran on Linux (cloud deployments, Docker, servers all run Linux).
+- When the JD domain differs (e.g., embedded JD vs web experience), highlight transferable CONCEPTS: performance optimization, debugging, system design, data pipelines, testing methodology.
+- Emphasize aspects of existing work that align with JD values, but keep the original tech stack honest. If the work used Python and Express.js, say so — don't pretend it was C++.
+- You MAY add "on Linux" to deployment/infra bullets when the work plausibly ran on Linux (cloud, Docker, servers).
+- The candidate's SKILLS section lists what they actually know. You may mention JD-relevant skills from that list in bullets, but only if the work context supports it.
 
 EMBEDDED / SYSTEMS / LOW-LEVEL ROLE MAPPING (use when JD mentions embedded, RTOS, firmware, QEMU, kernel, hardware, drivers, or similar):
 - These roles value FUNDAMENTALS over frameworks. Emphasize: C/C++, Linux, debugging, performance optimization, memory management, system architecture — de-emphasize web frameworks.
-- Web→Systems concept mapping (use these when reframing):
-  "API endpoint" → "system interface", "REST API" → "communication interface/protocol",
-  "microservice" → "modular system component", "database queries" → "data access and memory operations",
-  "backend server" → "system daemon/service on Linux", "JSON parsing" → "data serialization/deserialization",
-  "WebSocket/streaming" → "serial/socket communication", "caching layer" → "memory-mapped data layer",
-  "CI/CD pipeline" → "build and validation pipeline", "Docker container" → "virtualized environment",
-  "latency optimization" → "system-level performance optimization", "load testing" → "system validation and stress testing"
-- If JD mentions virtualization/QEMU/emulation: reframe any Docker/VM/container/cloud infra work toward virtualization concepts.
-- If JD mentions serial/UART/I2C/SPI: reframe any socket/streaming/communication protocol work toward serial communication.
-- If JD mentions memory mapping/layout: reframe any memory/caching/storage architecture work toward memory management.
-- If JD mentions RTOS/VxWorks/FreeRTOS: reframe any concurrency/async/real-time processing work toward real-time system concepts.
-- CREDIBILITY RULE: light fabrication is OK — adding plausible technical context that fits the work (e.g., adding "with memory-mapped I/O" to a data pipeline bullet, or "serial communication protocol" to a messaging system). But don't invent ENTIRELY unrelated activities (e.g., "wrote kernel module" when the original was "built landing page"). The candidate should be able to speak to the bullet in an interview.
+- Highlight transferable concepts WITHOUT faking the tech:
+  "optimized API latency" → "optimized system performance", "deployed to cloud" → "deployed on Linux",
+  "CI/CD pipeline" → "build and validation pipeline", "load testing" → "system validation and stress testing"
+- Do NOT map web concepts to hardware-specific terms the candidate didn't use. Specifically:
+  Do NOT add "serial communication", "UART", "I2C", "SPI", "memory-mapped I/O", "circular buffer", "RTOS", "board support" unless the original bullet already describes that kind of work.
+  "WebSocket" is NOT "serial communication". "Docker" is NOT "QEMU virtualization". "JSON parsing" is NOT "data serialization protocol". These are different technologies.
+- INTERVIEW TEST: For every bullet, ask "Could the candidate explain this in a 2-minute interview answer without lying?" If no, you've gone too far. Pull back to what actually happened, described in JD-friendly language.
 
 WRITING QUALITY RULES (critical):
 - NEVER use em dashes (—) or en dashes (–). Use regular hyphens (-) or commas instead. Em dashes signal LLM-generated text.
@@ -350,6 +363,8 @@ export async function refineBullets(
   tailoredBullets: TailoredBullet[],
   candidateSkills: string = "",
   customInstructions: string = "",
+  jobTitle: string = "",
+  company: string = "",
 ): Promise<TailoredBullet[]> {
   const origMap = Object.fromEntries(originalBullets.map((b) => [b.id, b.originalText]));
   const bullets = tailoredBullets.map((b) => ({
@@ -359,9 +374,17 @@ export async function refineBullets(
     chars: b.tailoredText.length,
   }));
 
-  const prompt = `You are a resume bullet EDITOR. You receive bullets that were already tailored to match a job description. Your job is to improve them further. Only rewrite bullets that have issues — pass through good ones unchanged.
+  const roleCtx = jobTitle && company
+    ? `a hiring manager at ${company} reviewing these bullets for "${jobTitle}"`
+    : jobTitle
+      ? `a hiring manager reviewing these bullets for "${jobTitle}"`
+      : company
+        ? `a hiring manager at ${company} reviewing these bullets`
+        : `a hiring manager reviewing these bullets`;
 
-CRITICAL CONTEXT: The tailored bullets were INTENTIONALLY reframed from the candidate's original work to match JD language. The "original" field is provided ONLY so you can check for fabricated metrics. Do NOT revert bullets back toward the original wording. The JD is the target — bullets should sound like the JD, not like the original resume.
+  const prompt = `You are ${roleCtx}. These bullets were already tailored to match the job description. Your job is to improve them further. Only rewrite bullets that have issues — pass through good ones unchanged.
+
+CRITICAL CONTEXT: The tailored bullets were reframed to match JD language. The "original" field is provided so you can check for fabricated metrics AND detect over-fitting (bullets that claim technologies or activities the original work didn't involve).
 
 ${customInstructions ? `USER INSTRUCTIONS (MUST follow): ${customInstructions}\n\n` : ""}JOB DESCRIPTION:
 ${jobDescription}
@@ -373,12 +396,11 @@ ${JSON.stringify(bullets)}
 
 CHECK EACH BULLET FOR THESE ISSUES AND FIX:
 
-1. DOMAIN MISMATCH (tailor TOWARD JD, never away from it):
-   - Identify the JD's domain (embedded/systems, web/cloud, data, etc.)
-   - If a bullet contains technologies IRRELEVANT to the JD domain, reframe it using JD-appropriate language
-   - Example: JD is embedded/systems → reframe "Spring Boot microservice" to "C/C++ system component on Linux", reframe "React/TypeScript UI" to "C++ interface with memory-optimized data structures"
-   - NEVER revert a bullet that already uses JD-appropriate language back to web/cloud/original terminology
-   - The candidate's original work domain does NOT matter — only the JD domain matters
+1. OVER-FITTING / CREDIBILITY CHECK (most important):
+   - Compare each tailored bullet to its original. If the tailored version claims hardware-specific terms (serial communication, memory-mapped I/O, UART, circular buffer, RTOS, board support) that the original doesn't support, REWRITE it to use honest language.
+   - INTERVIEW TEST: could the candidate explain this bullet in 2 minutes without lying? If not, pull back.
+   - It's fine to use JD vocabulary for genuine concepts (e.g., "optimized performance" instead of "reduced latency"). It's NOT fine to invent technologies (e.g., "RS-232 serial protocol" when original was "REST API").
+   - Keep the original tech stack honest. If the work used Python/Express.js, say so — describe the OUTCOMES in JD-friendly terms instead.
 
 2. LENGTH VIOLATIONS:
    - Under 80 chars → too sparse, add relevant JD keywords or technical detail to reach 80-88
@@ -393,10 +415,10 @@ CHECK EACH BULLET FOR THESE ISSUES AND FIX:
 5. REPETITION: If multiple bullets start with the same verb or use the same sentence structure, vary them.
 
 RULES:
-- If a bullet already matches JD domain and has no issues, return it EXACTLY as-is
+- If a bullet is honest AND uses JD-friendly language AND has no issues, return it EXACTLY as-is
 - Keep all real metrics/numbers from originals intact
 - NEVER use em dashes or en dashes
-- NEVER revert JD-targeted language back to original/generic language
+- Revert fabricated technical claims back to honest descriptions using JD-friendly vocabulary
 - Output must follow length rules strictly: 80-88 or 160-176 chars per bullet
 
 Return ONLY a JSON array, no markdown fences: [{"id": "...", "tailoredText": "..."}]`;

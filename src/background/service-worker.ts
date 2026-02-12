@@ -36,7 +36,8 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
     if (message.type === "START_TAILORING") {
-      handleTailoring(message.payload.jobDescription);
+      const { jobDescription, jobTitle, company } = message.payload;
+      handleTailoring(jobDescription, jobTitle, company);
       return false;
     }
     if (message.type === "OPEN_OPTIONS") {
@@ -172,7 +173,7 @@ async function compileTex(tex: string): Promise<ArrayBuffer | null> {
   }
 }
 
-async function handleTailoring(jobDescription: string) {
+async function handleTailoring(jobDescription: string, jobTitle: string, company: string) {
   try {
     await clearTailoringState();
     await progress("Preparing...", 10);
@@ -211,6 +212,8 @@ async function handleTailoring(jobDescription: string) {
       ALWAYS_INCLUDE_SKILLS,
       candidateSkills,
       customInstructions,
+      jobTitle,
+      company,
     );
 
     // Fill in any missing tailoredText with originals
@@ -231,6 +234,8 @@ async function handleTailoring(jobDescription: string) {
         tailoredBullets,
         candidateSkills,
         customInstructions,
+        jobTitle,
+        company,
       );
       const refinedMap = new Map(refined.map((b) => [b.id, b.tailoredText]));
       for (const b of tailoredBullets) {

@@ -101,7 +101,7 @@ export function App() {
       setStage("tailoring");
       chrome.runtime.sendMessage({
         type: "START_TAILORING",
-        payload: { jobDescription: jd.description },
+        payload: { jobDescription: jd.description, jobTitle: jd.title || "", company: jd.company || "" },
       } as Message);
     } catch (err) {
       setStage("error");

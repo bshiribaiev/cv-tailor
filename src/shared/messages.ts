@@ -4,7 +4,7 @@ export type Message =
       type: "JOB_DESC_RESULT";
       payload: { title: string; company: string; description: string };
     }
-  | { type: "START_TAILORING"; payload: { jobDescription: string } }
+  | { type: "START_TAILORING"; payload: { jobDescription: string; jobTitle: string; company: string } }
   | { type: "TAILORING_PROGRESS"; payload: { stage: string; pct: number } }
   | {
       type: "TAILORING_COMPLETE";
