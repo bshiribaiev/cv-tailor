@@ -31,11 +31,21 @@ export function extractJobDescription(): JobInfo {
     }
   }
 
-  // Greenhouse
-  if (host.includes("greenhouse.io") || host.includes("boards.greenhouse")) {
-    const descEl = document.querySelector<HTMLElement>("#content");
+  // Greenhouse (native or embedded via gh_jid param)
+  const isGreenhouse =
+    host.includes("greenhouse.io") ||
+    host.includes("boards.greenhouse") ||
+    new URLSearchParams(window.location.search).has("gh_jid") ||
+    !!document.querySelector("#grnhse_app");
+  if (isGreenhouse) {
+    // Embedded Greenhouse renders inside #grnhse_app iframe or injected div
+    const descEl =
+      document.querySelector<HTMLElement>("#grnhse_app") ??
+      document.querySelector<HTMLElement>("#content");
     if (descEl) {
-      const titleEl = document.querySelector<HTMLElement>(".app-title");
+      const titleEl =
+        document.querySelector<HTMLElement>(".app-title") ??
+        document.querySelector<HTMLElement>("h1");
       const companyEl = document.querySelector<HTMLElement>(".company-name");
       return {
         title: titleEl?.textContent?.trim() ?? "",

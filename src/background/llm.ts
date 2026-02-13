@@ -52,51 +52,57 @@ export async function tailorBullets(
         ? `a ${persona} at ${company}`
         : `a ${persona}`;
 
-  const prompt = `STEP 1 — HIRING MANAGER CRITIQUE:
-You are ${roleCtx}. Review this candidate's resume bullets against the job description below. Be specific:
-- What's strong? Which bullets already align well with what you need?
-- What's missing? Which JD requirements have no coverage?
-- What feels irrelevant or would you skip reading?
-- What would you want to see more of?
+  const prompt = `STEP 1 — JD VOCABULARY EXTRACTION:
+List EVERY technology, language, platform, tool, domain term, and concept from the job description. This is the "JD vocabulary" — these exact words must appear in your tailored bullets.
 
-STEP 2 — TAILOR BASED ON YOUR CRITIQUE:
-Now rewrite the bullets to address the gaps you identified. Use JD language where the underlying work supports it.
+STEP 2 — HIRING MANAGER CRITIQUE:
+You are ${roleCtx}. Review the candidate's resume bullets against the JD:
+- Which bullets already align with what you need?
+- Which JD requirements have zero coverage?
+- Which technologies feel irrelevant to this role?
+- Which JD vocabulary terms are absent but could naturally describe the candidate's existing work?
+
+STEP 3 — TAILOR BASED ON YOUR CRITIQUE:
+Rewrite the bullets to address the gaps. Use JD vocabulary where the underlying work supports it.
 
 KEYWORD INTEGRATION RULES:
 - Maximize keyword coverage where the underlying work SUPPORTS it. Every bullet should use JD language where the original work naturally maps, but don't force keywords into bullets where the connection is a stretch. A bullet can stay lightly modified if the remaining JD keywords don't genuinely relate to that work.
-- REFRAME the work to match JD language. E.g., if JD says "data pipelines" and bullet describes a reporting pipeline, call it a "data pipeline". If JD says "quality control workflows" and bullet describes QA validation, call it a "quality control workflow".
+- REFRAME using JD's EXACT noun phrases — not looser synonyms. "reporting pipeline" → "data pipeline" when JD says "data pipelines". "cloud deployment" → "deployed on Linux" when JD requires Linux. "reduced latency" → "low-latency" when JD says "low-latency". Always use the JD's specific term, never a vaguer paraphrase.
 - Swap technologies for JD equivalents ONLY within the same category: DB→DB (PostgreSQL→MySQL), VCS→VCS (GitHub→BitBucket), web framework→web framework (Express→Spring Boot).
-- NEVER swap across categories (e.g., React→C++, Express.js→embedded). If the JD domain differs from the work, reframe the CONCEPTS and outcomes, not the tech stack.
+- NEVER swap tech 1:1 across categories (e.g., React→C++, Express.js→embedded). But DO drop irrelevant tech entirely and reframe the CONCEPTS and outcomes using JD vocabulary.
+- ANTI-GENERICIZATION: Every removed tech MUST be replaced with a JD-relevant term — never leave a void. "Built backend with Express.js" for a systems JD → "Built low-latency data service on Linux", NOT "Built backend system". If a bullet becomes vaguer than the original after tailoring, add JD terms until specificity matches or exceeds the original.
 - Keep the same specificity level. Don't replace "React/TypeScript" with just "JavaScript".
 - Use JD domain language to DESCRIBE existing work. If JD mentions "JSON transformation", "admin dashboards", "bulk operations", "workflow management", "serverless" — reword bullets to use those exact phrases where the underlying work supports it.
 - You MAY add brief process context ONLY if it fits naturally and doesn't bloat the bullet
 - Process keywords (testing, code reviews, Agile) must be CAUSALLY related to the action. "Reducing latency via code reviews" is WRONG — code reviews don't reduce latency. Instead: "Built X with unit testing and code reviews" is correct.
 - Distribute JD keywords across modified bullets — don't cluster the same keyword in every one
-- Candidate's signature skills: ${alwaysIncludeSkills.join(", ")}. Include ONLY when relevant to the JD domain. If a skill doesn't appear in or relate to the JD (e.g., Spring Boot for an embedded role, Next.js for a systems role), do NOT mention it at all. JD-specific keywords ALWAYS take absolute priority over this list.
+- Candidate's signature skills: ${alwaysIncludeSkills.join(", ")}. This list is FULLY OVERRIDDEN by tech relevance: if a skill doesn't appear in or relate to the JD, do NOT mention it at all. Spring Boot, Next.js, Express.js, React, Node.js — drop ALL of these for non-web JDs. JD-specific keywords ALWAYS take absolute priority.
 
-TECH RELEVANCE FILTER (apply before writing):
-- For every technology you're about to mention, ask: "Would the hiring manager for THIS role care about this?" If no, DROP it or replace with the transferable concept/outcome.
-- Do NOT repeat the same technology name across multiple bullets. Mention a technology at most ONCE across all bullets. If 3 bullets used Python, mention Python in the strongest bullet and describe the other 2 via outcomes and transferable concepts.
-- Do NOT repeat the same noun phrase (e.g., "data pipeline") across multiple bullets. Use synonyms or describe the work differently.
+TECH RELEVANCE & REFRAMING (apply to EVERY bullet, for ANY JD):
+- Step 1: Extract JD's tech stack and domain vocabulary. List every technology, framework, concept, and skill the JD mentions. This is the "relevant set." Also list the JD's DOMAIN-SPECIFIC phrases (e.g., "machine learning", "deep learning", "optimization algorithms", "data pipelines", "embedded systems") — these are the words you MUST use in bullets, not generic synonyms.
+- Step 2: For every tech in each bullet, check: does it appear in the JD OR directly support something in the JD? If NO, DROP it. Replace with either (a) a JD technology the candidate actually knows (from their skills section), or (b) a JD domain phrase that describes the same concept. NEVER replace with generic terms like "workflow optimization" or "backend system" when the JD has specific vocabulary available.
+- Step 3: Reframe using JD's EXACT domain phrases, not watered-down versions. If JD says "machine learning", write "machine learning", not "intelligent workflow". If JD says "optimization algorithms", write "optimization algorithms", not "workflow optimization". Match the JD's specificity level.
+- Concrete examples of suppress & reframe:
+  JD says "data pipelines" + bullet describes "SEO reporting pipeline" → call it "data pipeline", NOT just "pipeline"
+  JD requires "Linux" + bullet mentions cloud deployment → add "on Linux": "deployed on Linux with cron scheduling"
+  JD says "low-latency" + bullet mentions "reducing API latency" → say "low-latency" explicitly
+  JD says "systems programming" + bullet describes backend work → reframe as "systems-level"
+  JD says "optimization algorithms" + bullet mentions "Express.js backend" → drop Express.js, say "optimization algorithm"
+  JD says "machine learning" + bullet mentions "React search UI" → drop React, say "ML-driven search"
+  JD says "embedded systems" + bullet mentions "Spring Boot microservice" → drop Spring Boot, say "modular system architecture"
+  General pattern: drop irrelevant tech, USE THE JD'S EXACT DOMAIN TERMS, not generic descriptions
+- CANDIDATE SKILL WEAVING (critical — verify before returning): Cross-reference JD-required technologies against the candidate's SKILLS section. For EACH match (tech in both JD and candidate skills), it MUST appear in at least one bullet. Non-negotiable. E.g., candidate knows C++ and JD requires C++ → use C++ in a bullet. Candidate knows Python and JD lists Python → Python must appear. JD requires Linux and candidate has cloud/infra experience → add "on Linux". Candidate knows PyTorch and JD wants ML → weave PyTorch in. After drafting all bullets, CHECK: is every JD+candidate skill match represented? If any is missing, revise now.
+- Do NOT inject technologies that appear in NEITHER the JD NOR the candidate's skills section. Only use tech from the JD's relevant set or the candidate's known skills. E.g., don't add Selenium, Kafka, or Redis if they're not in the JD and the candidate doesn't list them.
+- DEDUP (strictly enforced):
+  - Each technology name may appear in AT MOST ONE bullet across the entire set. If Python appears in 3 originals, pick the strongest bullet for Python and describe the others via outcomes or different tech.
+  - Each noun phrase (e.g., "data pipeline", "optimization") may appear AT MOST ONCE. Use the JD's full vocabulary — if JD says "machine learning", "deep learning", "optimization", "GPU", "AI" — that's 5 different phrases to distribute, not 1 repeated 5 times.
+  - Before returning, scan all bullets and count occurrences of every tech name and noun phrase. If any appears more than once, rewrite to fix.
 
-TRANSFERABLE SKILLS (when JD domain differs from experience):
-- When the JD domain differs (e.g., embedded JD vs web experience), highlight transferable CONCEPTS: performance optimization, debugging, system design, data processing, testing methodology, system validation.
-- You can mention the original tech briefly, but lead with the transferable concept. Instead of "Built Python data pipeline", write "Designed automated data processing system in Python" — the concept leads, the tech follows.
-- You MAY add "on Linux" to deployment/infra bullets when the work plausibly ran on Linux (cloud, Docker, servers).
-- The candidate's SKILLS section lists what they actually know. If a JD skill appears in the candidate's skills (e.g., C++, Linux), ACTIVELY weave it into bullets where the work context supports it — these are real skills, not fabrications. Prioritize JD skills the candidate actually knows over generic reframing.
-
-EMBEDDED / SYSTEMS / LOW-LEVEL ROLE MAPPING (use when JD mentions embedded, RTOS, firmware, QEMU, kernel, hardware, drivers, or similar):
-- These roles value FUNDAMENTALS over frameworks. Emphasize: C/C++, Linux, debugging, performance optimization, memory management, system architecture.
-- ACTIVELY SUPPRESS web-specific tech: React, Express, WebSocket, Node.js, Spring Boot, Next.js — DROP these entirely unless the bullet makes no sense without them. Replace with the underlying concept: "WebSocket real-time communication" → "real-time message processing", "React hooks" → "component architecture", or just omit.
-- JD KEYWORD COVERAGE IS THE PRIORITY: Before finalizing, check that major JD skills and concepts are represented across the bullet set. If important JD keywords (e.g., C++, Linux, debugging, system architecture, virtualization) are missing while non-JD tech repeats across bullets, replace some non-JD tech mentions with JD-relevant concepts.
-- If the candidate's skills include C++, Linux, or other JD-relevant systems skills, weave them prominently. These are real skills — treat them as primary, not secondary.
-- Reframe using systems/embedded vocabulary:
-  "optimized API latency" → "optimized system performance", "deployed to cloud" → "deployed on Linux",
-  "CI/CD pipeline" → "build and validation pipeline", "load testing" → "system validation and stress testing",
-  "microservice" → "modular service architecture", "REST API" → "interface layer"
-- Do NOT map web concepts to hardware-specific terms the candidate didn't use. Specifically:
-  Do NOT add "serial communication", "UART", "I2C", "SPI", "memory-mapped I/O", "circular buffer", "RTOS", "board support" unless the original bullet already describes that kind of work.
-- INTERVIEW TEST: For every bullet, ask "Could the candidate explain this in a 2-minute interview answer without lying?" If no, you've gone too far. Pull back to what actually happened, described in JD-friendly language.
+FINAL VERIFICATION (mandatory before outputting JSON):
+1. List every JD-required tech the candidate also knows. Does EACH appear in at least one bullet? If not, fix now.
+2. Does every bullet have at least one JD keyword or domain term? If not, add one.
+3. Is any bullet more generic than its original (lost tech names without gaining JD terms)? If yes, add JD vocabulary.
+4. For non-web JDs: do any bullets still contain React, Express, Spring Boot, Next.js, or Node.js? If yes, suppress and reframe.
 
 BULLET STRUCTURE (Google XYZ format — follow for EVERY bullet):
 - Format: "Accomplished [X] as measured by [Y], by doing [Z]"
@@ -118,14 +124,13 @@ WRITING QUALITY RULES (critical):
 - Keep the SAME achievement/metric/outcome — do NOT drop metrics, numbers, or dollar amounts
 - Do NOT fabricate new achievements or metrics. Do NOT change numbers, percentages, or dollar amounts.
 
-LENGTH RULES (one printed line ≈ 88 characters):
-- Single-line bullets MUST be 80-88 characters. Bullets under 80 chars look sparse and waste space — add relevant technical detail to fill the line.
-- At least 4 out of every 6 bullets MUST be single-line (80-88 chars).
-- Only go to 2 lines (160-176 chars) for bullets with genuinely dense technical content AND critical JD keywords that can't fit in 88 chars.
-- If the original bullet was 1 line, the tailored version should also be 1 line unless absolutely necessary.
-- NEVER output 89-159 characters — causes ugly wrapping. Either 80-88 or 160-176.
-- NEVER output under 80 characters — looks sparse. Add JD keywords or technical context to fill the line.
-- NEVER exceed 176 characters.
+LENGTH RULES (CRITICAL — one printed line ≈ 105 characters in this LaTeX template):
+- DEFAULT is single-line: 90-105 characters. Every bullet should be single-line UNLESS you have a specific reason to go longer.
+- MAXIMUM 1 bullet per job entry (3-bullet group) may be 2 lines (180-210 chars). The other 2 MUST be single-line. If all 3 fit in 90-105 chars, keep all 3 single-line.
+- When a bullet exceeds 105 chars, DROP the least important detail to fit 90-105. Do NOT default to 2 lines. Prefer concise over comprehensive.
+- NEVER output 106-179 characters — causes ugly wrapping. Either 90-105 or 180-210.
+- NEVER output under 90 characters — looks sparse. Add JD keywords or technical context.
+- NEVER exceed 210 characters. NEVER produce 3-line bullets.
 - Count characters carefully for every bullet before returning.
 
 CANDIDATE'S SKILLS (safe to reference in bullets):
@@ -154,8 +159,9 @@ RULES:
 - Reorder skills — put JD-required skills first in each category
 - ADD missing JD-required tools/skills to the appropriate category (max 3 new per category)
 - Prioritize skills the JD explicitly lists as "required" or "must-have"
-- Do NOT remove any existing skills
+- May drop skills irrelevant to the JD to stay within line length, but NEVER drop always-include skills
 - These must always appear: ${alwaysIncludeSkills.join(", ")}
+- If JD requires system-level skills (Linux, Unix, Bash, etc.), ADD them to the appropriate category
 - Keep comma-separated format
 - Keep each category to one line (~85 chars max for items)
 
@@ -411,30 +417,34 @@ ${JSON.stringify(bullets)}
 
 CHECK EACH BULLET FOR THESE ISSUES AND FIX:
 
-1. OVER-FITTING / CREDIBILITY CHECK (most important):
-   - Compare each tailored bullet to its original. If the tailored version claims hardware-specific terms (serial communication, memory-mapped I/O, UART, circular buffer, RTOS, board support) that the original doesn't support, REWRITE it to use honest language.
-   - INTERVIEW TEST: could the candidate explain this bullet in 2 minutes without lying? If not, pull back.
-   - It's fine to use JD vocabulary for genuine concepts (e.g., "optimized performance" instead of "reduced latency"). It's NOT fine to invent technologies (e.g., "RS-232 serial protocol" when original was "REST API").
-   - Keep the original tech stack honest. If the work used Python/Express.js, say so — describe the OUTCOMES in JD-friendly terms instead.
+1. WEB FRAMEWORK SUPPRESSION: If web-specific frameworks (React, Express, Spring Boot, Next.js, Node.js) remain in bullets but DON'T appear in the JD, suppress them and reframe using JD vocabulary. This overrides the always-include skills list.
 
-2. LENGTH VIOLATIONS:
-   - Under 80 chars → too sparse, add relevant JD keywords or technical detail to reach 80-88
-   - 89-159 chars → dead zone, either cut to 80-88 or expand to 160-176
-   - Over 176 chars → too long, cut to ≤176
-   - Target: 80-88 chars for 1-line bullets, 160-176 for 2-line bullets
+2. INJECTED TECH CHECK: If any bullet contains a technology that appears in NEITHER the JD NOR the candidate's skills section (e.g., Selenium, Kafka, Redis added from nowhere), remove it and replace with JD-relevant tech or domain vocabulary.
 
-3. KEYWORD GAPS: List all major JD keywords. Check which ones appear across the bullet set. If important JD keywords are completely missing, weave them into the weakest bullets.
+3. LENGTH VIOLATIONS:
+   - Under 90 chars → too sparse, add JD keywords or technical detail to reach 90-105
+   - 106-179 chars → dead zone, either cut to 90-105 or expand to 180-210
+   - Over 210 chars → too long, cut to ≤210. NEVER allow 3-line bullets.
+   - Target: 90-105 chars for 1-line bullets (preferred), 180-210 for 2-line (max 1-2 per entry)
 
-4. FABRICATED METRICS: If the tailored version has a number/metric (%, $, hours) that does NOT appear in the original, REMOVE that metric. Adding plausible technical context (tools, methods, systems language) is fine — only fabricated NUMBERS are not allowed.
+3. KEYWORD GAPS (highest priority): ENUMERATE every JD technology and domain term. For each, verify it appears in at least one bullet. Focus on: (a) JD programming languages the candidate knows — EACH must appear in a bullet, (b) JD platforms/OS (Linux, Unix) — must be mentioned if required, (c) JD domain phrases ("data pipelines", "low-latency", "systems programming") — if bullets use generic alternatives ("pipeline", "reduced latency", "backend"), swap to JD's exact phrases. If a JD-required language like C++ or Python is absent from all bullets despite the candidate knowing it, this is the #1 issue to fix.
 
-5. VERB REPETITION (critical): Check ALL bullet leading verbs. If ANY two bullets start with the same verb (e.g., two "Built..." or two "Developed..."), rewrite one to use a different verb. Every bullet must have a unique opening verb.
+4. TECH/PHRASE DEDUP: Scan all bullets for repeated technology names and noun phrases. If any tech name appears more than once (e.g., Python in 3 bullets), keep it in the strongest bullet and rewrite others using different tech or outcome-focused language. If any noun phrase repeats (e.g., "optimization" in 4 bullets), replace with different JD vocabulary.
+
+5. FABRICATED METRICS: If the tailored version has a number/metric (%, $, hours) that does NOT appear in the original, REMOVE that metric. Adding plausible technical context (tools, methods, systems language) is fine — only fabricated NUMBERS are not allowed.
+
+6. VERB REPETITION (critical): Check ALL bullet leading verbs. If ANY two bullets start with the same verb (e.g., two "Built..." or two "Developed..."), rewrite one to use a different verb. Every bullet must have a unique opening verb.
+
+7. GENERIC REFRAMING: If any bullet uses vague terms ("workflow optimization", "intelligent workflow", "backend system") when the JD has specific domain vocabulary available (e.g., "machine learning", "optimization algorithms", "GPU-accelerated"), replace the generic term with the JD's exact phrase where the underlying work supports it.
+
+8. GENERICIZATION CHECK: Compare each tailored bullet to its original. If the tailored version LOST specific tech names or details without replacing them with JD-equivalent terms, it's under-tailored. E.g., original had "Salesforce data with Pandas" → tailored says "data validation with Python" but JD mentions "data pipelines" → rewrite as "data pipeline validation with Python on Linux". Every removed detail must be backfilled with JD vocabulary.
 
 RULES:
-- If a bullet is honest AND uses JD-friendly language AND has no issues, return it EXACTLY as-is
+- If a bullet uses JD domain vocabulary AND has no issues above, return it EXACTLY as-is
 - Keep all real metrics/numbers from originals intact
 - NEVER use em dashes or en dashes
-- Revert fabricated technical claims back to honest descriptions using JD-friendly vocabulary
-- Output must follow length rules strictly: 80-88 or 160-176 chars per bullet
+- Only use tech from the JD or the candidate's skills section — no injected tech from nowhere
+- Output must follow length rules strictly: 90-105 or 180-210 chars per bullet
 
 Return ONLY a JSON array, no markdown fences: [{"id": "...", "tailoredText": "..."}]`;
 

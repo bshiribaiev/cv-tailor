@@ -11,7 +11,8 @@
   "host_permissions": [
     "https://generativelanguage.googleapis.com/*",
     "https://api.anthropic.com/*",
-    "https://latex.ytotech.com/*"
+    "https://latex.ytotech.com/*",
+    "https://boards-api.greenhouse.io/*"
   ],
   "action": {
     "default_popup": "src/popup/index.html",
@@ -27,18 +28,7 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://www.linkedin.com/jobs/*",
-        "https://linkedin.com/jobs/*",
-        "https://*.greenhouse.io/*",
-        "https://jobs.lever.co/*",
-        "https://*.myworkdayjobs.com/*",
-        "https://*.myworkday.com/*",
-        "https://careers.google.com/*",
-        "https://jobs.ashbyhq.com/*",
-        "https://*.applytojob.com/*",
-        "https://jobs.smartrecruiters.com/*"
-      ],
+      "matches": ["<all_urls>"],
       "js": ["src/content/floating-button.ts"],
       "run_at": "document_idle"
     }

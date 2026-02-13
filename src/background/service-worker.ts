@@ -9,8 +9,8 @@ import {
   getTailorSkills,
   getCustomInstructions,
 } from "../shared/storage";
-import { tailorBullets, tailorSkills, shortenBullets, expandBullets, refineBullets, testApiKey } from "./gemini";
-import type { TailoredBullet, TailoredSkills } from "./gemini";
+import { tailorBullets, tailorSkills, shortenBullets, expandBullets, refineBullets, testApiKey } from "./llm";
+import type { TailoredBullet, TailoredSkills } from "./llm";
 
 // Allow content scripts to access session storage (for floating button progress)
 chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
@@ -44,8 +44,31 @@ chrome.runtime.onMessage.addListener(
       chrome.runtime.openOptionsPage();
       return false;
     }
+    if (message.type === "FETCH_GREENHOUSE_JD") {
+      fetchGreenhouseJD(message.payload.board, message.payload.jobId).then(sendResponse);
+      return true;
+    }
   },
 );
+
+async function fetchGreenhouseJD(board: string, jobId: string) {
+  try {
+    const res = await fetch(
+      `https://boards-api.greenhouse.io/v1/boards/${board}/jobs/${jobId}`,
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    // content is HTML — strip tags for plain text
+    const html = (data.content as string) || "";
+    const text = html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    const title = (data.title as string) || "";
+    const company = (data.company?.name as string) || "";
+    if (text.length < 50) return null;
+    return { title, company, description: text };
+  } catch {
+    return null;
+  }
+}
 
 async function handleGetStatus() {
   const provider = await getProvider();
@@ -246,8 +269,8 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
       console.log("[CV Tailor] refineBullets failed, using first-pass results:", err);
     }
 
-    // Post-process: only enforce max length (176 chars = 2 lines)
-    const MAX_BULLET_LEN = 176;
+    // Post-process: only enforce max length (210 chars = 2 lines)
+    const MAX_BULLET_LEN = 210;
     const tooLong = tailoredBullets.filter((b) => b.tailoredText.length > MAX_BULLET_LEN);
 
     if (tooLong.length > 0) {
@@ -277,39 +300,39 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
       }
     }
 
-    // Post-process: fix dead-zone bullets (89-159 chars cause ugly wrapping)
-    const DEAD_ZONE_MIN = 89;
-    const DEAD_ZONE_MAX = 159;
+    // Post-process: fix dead-zone bullets (106-179 chars cause ugly wrapping)
+    const DEAD_ZONE_MIN = 106;
+    const DEAD_ZONE_MAX = 179;
     const deadZone = tailoredBullets.filter(
       (b) => b.tailoredText.length >= DEAD_ZONE_MIN && b.tailoredText.length <= DEAD_ZONE_MAX,
     );
 
     if (deadZone.length > 0) {
-      console.log(`[CV Tailor] ${deadZone.length} bullets in dead zone (${DEAD_ZONE_MIN}-${DEAD_ZONE_MAX} chars), shortening to ≤88`);
+      console.log(`[CV Tailor] ${deadZone.length} bullets in dead zone (${DEAD_ZONE_MIN}-${DEAD_ZONE_MAX} chars), shortening to ≤105`);
       await progress("Fixing line wrapping...", 50);
       try {
-        const shortened = await shortenBullets(deadZone, 88);
+        const shortened = await shortenBullets(deadZone, 105);
         const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
         // Collect bullets still in dead zone after shortening attempt
         const stillDead: TailoredBullet[] = [];
         for (const b of tailoredBullets) {
           const short = shortenedMap.get(b.id);
-          if (short && short.length <= 88) {
+          if (short && short.length <= 105) {
             b.tailoredText = short;
           } else if (short && short.length >= DEAD_ZONE_MIN && short.length <= DEAD_ZONE_MAX) {
             // Still in dead zone — keep tailored content, try expanding to 2 lines
             stillDead.push({ id: b.id, tailoredText: short });
           }
         }
-        // Second pass: expand dead-zone survivors to 160-176 chars (2 lines) instead of reverting
+        // Second pass: expand dead-zone survivors to 180-210 chars (2 lines) instead of reverting
         if (stillDead.length > 0) {
           console.log(`[CV Tailor] ${stillDead.length} bullets still in dead zone, expanding to 2 lines`);
           try {
-            const expanded = await expandBullets(stillDead, 160, MAX_BULLET_LEN);
+            const expanded = await expandBullets(stillDead, 180, MAX_BULLET_LEN);
             const expandedMap = new Map(expanded.map((b) => [b.id, b.tailoredText]));
             for (const b of tailoredBullets) {
               const exp = expandedMap.get(b.id);
-              if (exp && (exp.length <= 88 || (exp.length >= 160 && exp.length <= MAX_BULLET_LEN))) {
+              if (exp && (exp.length <= 105 || (exp.length >= 180 && exp.length <= MAX_BULLET_LEN))) {
                 b.tailoredText = exp;
               } else if (exp && exp.length >= DEAD_ZONE_MIN && exp.length <= DEAD_ZONE_MAX) {
                 // Still stuck — revert as last resort

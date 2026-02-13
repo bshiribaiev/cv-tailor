@@ -1,6 +1,58 @@
-/** Content script auto-injected on job sites — edge tab that auto-expands on complete */
+/** Content script injected on all pages — shows FAB only when job posting detected */
 
 import { extractJobDescription } from "./extractor";
+
+/** Lightweight check: is this page likely a job posting? */
+function isJobPage(): boolean {
+  // Skip iframes
+  if (window !== window.top) return false;
+
+  const url = window.location.href.toLowerCase();
+
+  // URL path/param signals
+  const urlSignals = [
+    "/jobs/", "/job/", "/careers/", "/career/", "/positions/", "/position/",
+    "/openings/", "/opening/", "/vacancies/", "/vacancy/",
+    "/apply", "gh_jid=", "lever_jid=",
+  ];
+  if (urlSignals.some((s) => url.includes(s))) return true;
+
+  // Known ATS selectors
+  const atsSelectors = [
+    '[data-automation-id="jobPostingDescription"]', // Workday
+    ".posting-headline",                            // Lever
+    "#grnhse_app",                                  // Greenhouse embed
+    ".jobs-description-content__text",              // LinkedIn
+    ".job-description", ".jobDescription",
+    "#job-description", "#jobDescription",
+  ];
+  if (atsSelectors.some((s) => document.querySelector(s))) return true;
+
+  // Keyword density in first 10k chars
+  const text = document.body?.innerText?.toLowerCase().slice(0, 10000) ?? "";
+  const keywords = [
+    "qualifications", "responsibilities", "requirements",
+    "apply now", "job description", "equal opportunity",
+  ];
+  const hits = keywords.filter((k) => text.includes(k)).length;
+  return hits >= 2;
+}
+
+/** Find Greenhouse board token from embedded script tags on the page */
+function findGreenhouseBoardToken(): string | null {
+  const scripts = document.querySelectorAll<HTMLScriptElement>("script[src]");
+  for (const s of scripts) {
+    const match = s.src.match(/boards\.greenhouse\.io\/.*[?&]for=([^&]+)/);
+    if (match) return match[1];
+  }
+  // Also check iframes
+  const iframes = document.querySelectorAll<HTMLIFrameElement>("iframe[src]");
+  for (const f of iframes) {
+    const match = f.src.match(/boards\.greenhouse\.io\/.*[?&]for=([^&]+)/);
+    if (match) return match[1];
+  }
+  return null;
+}
 
 // Internal state
 let currentState: "idle" | "extracting" | "tailoring" | "done" | "error" = "idle";
@@ -14,15 +66,35 @@ let hasApiKey = false;
 function init() {
   if (document.getElementById("cv-tailor-fab")) return;
 
-  const root = document.createElement("div");
-  root.id = "cv-tailor-fab";
-  root.innerHTML = `
+  const host = document.createElement("div");
+  host.id = "cv-tailor-fab";
+  const shadow = host.attachShadow({ mode: "open" });
+  shadow.innerHTML = `
+    <style>
+      #cv-tailor-root {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 13px;
+        color: #333;
+        line-height: 1.4;
+        text-transform: none;
+        letter-spacing: normal;
+        font-weight: normal;
+        font-style: normal;
+        text-align: left;
+        word-spacing: normal;
+        direction: ltr;
+      }
+      button, p, span, div {
+        font-family: inherit;
+        text-transform: none;
+        letter-spacing: normal;
+      }
+    </style>
     <div id="cv-tailor-root" style="
       position: fixed;
       bottom: 80px;
       right: 0;
       z-index: 2147483647;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     ">
       <div id="cv-tailor-tab" style="
         background: #2563eb;
@@ -75,13 +147,13 @@ function init() {
       </div>
     </div>
   `;
-  document.body.appendChild(root);
+  document.body.appendChild(host);
 
-  const tab = document.getElementById("cv-tailor-tab")!;
-  const panel = document.getElementById("cv-tailor-panel")!;
-  const body = document.getElementById("cv-tailor-body")!;
-  const settingsBtn = document.getElementById("cv-tailor-settings")!;
-  const closeBtn = document.getElementById("cv-tailor-close")!;
+  const tab = shadow.getElementById("cv-tailor-tab")!;
+  const panel = shadow.getElementById("cv-tailor-panel")!;
+  const body = shadow.getElementById("cv-tailor-body")!;
+  const settingsBtn = shadow.getElementById("cv-tailor-settings")!;
+  const closeBtn = shadow.getElementById("cv-tailor-close")!;
 
   // Hover on tab
   tab.addEventListener("mouseenter", () => { tab.style.background = "#1d4ed8"; });
@@ -115,7 +187,7 @@ function init() {
           border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;
         ">Tailor Resume</button>
       `;
-      document.getElementById("cv-tailor-start")?.addEventListener("click", () => {
+      shadow.getElementById("cv-tailor-start")?.addEventListener("click", () => {
         startTailoring();
       });
     } else if (currentState === "extracting" || currentState === "tailoring") {
@@ -141,8 +213,8 @@ function init() {
           border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px;
         ">Tailor Another</button>
       `;
-      document.getElementById("cv-tailor-download")?.addEventListener("click", () => downloadFile(currentPayload!));
-      document.getElementById("cv-tailor-again")?.addEventListener("click", () => {
+      shadow.getElementById("cv-tailor-download")?.addEventListener("click", () => downloadFile(currentPayload!));
+      shadow.getElementById("cv-tailor-again")?.addEventListener("click", () => {
         currentState = "idle";
         currentPayload = null;
         renderBody();
@@ -155,7 +227,7 @@ function init() {
           border-radius:8px;cursor:pointer;font-size:12px;
         ">Try Again</button>
       `;
-      document.getElementById("cv-tailor-retry")?.addEventListener("click", () => {
+      shadow.getElementById("cv-tailor-retry")?.addEventListener("click", () => {
         currentState = "idle";
         currentError = "";
         panel.style.display = "none";
@@ -163,6 +235,26 @@ function init() {
         tab.style.background = "#2563eb";
       });
     }
+  }
+
+  function beginTailoring(description: string, title: string, company: string) {
+    currentState = "tailoring";
+    currentStage = "Tailoring resume...";
+    currentPct = 10;
+    renderBody();
+    chrome.runtime.sendMessage({
+      type: "START_TAILORING",
+      payload: { jobDescription: description, jobTitle: title, company },
+    });
+  }
+
+  function showExtractionError() {
+    currentState = "error";
+    currentError = "Could not extract job description from this page.";
+    tab.style.display = "none";
+    tab.style.background = "#2563eb";
+    panel.style.display = "block";
+    renderBody();
   }
 
   function startTailoring() {
@@ -191,25 +283,31 @@ function init() {
       }
 
       const jd = extractJobDescription();
-      if (!jd.description || jd.description.length < 50) {
-        currentState = "error";
-        currentError = "Could not extract job description from this page.";
-        tab.style.display = "none";
-        tab.style.background = "#2563eb";
-        panel.style.display = "block";
-        renderBody();
+      if (jd.description && jd.description.length >= 50) {
+        beginTailoring(jd.description, jd.title, jd.company);
         return;
       }
 
-      currentState = "tailoring";
-      currentStage = "Tailoring resume...";
-      currentPct = 10;
-      renderBody();
+      // Fallback: Greenhouse embedded via iframe (gh_jid in URL)
+      const ghJid = new URLSearchParams(location.search).get("gh_jid");
+      const ghBoard = findGreenhouseBoardToken();
+      if (ghJid && ghBoard) {
+        currentStage = "Fetching job description...";
+        renderBody();
+        chrome.runtime.sendMessage(
+          { type: "FETCH_GREENHOUSE_JD", payload: { board: ghBoard, jobId: ghJid } },
+          (ghRes: any) => {
+            if (ghRes?.title || ghRes?.description) {
+              beginTailoring(ghRes.description, ghRes.title, ghRes.company);
+            } else {
+              showExtractionError();
+            }
+          },
+        );
+        return;
+      }
 
-      chrome.runtime.sendMessage({
-        type: "START_TAILORING",
-        payload: { jobDescription: jd.description, jobTitle: jd.title, company: jd.company },
-      });
+      showExtractionError();
     });
   }
 
@@ -236,8 +334,8 @@ function init() {
     currentPct = pct;
     tab.style.background = "#f59e0b";
     // Update in-place if panel is open
-    const bar = document.getElementById("cv-tailor-progress");
-    const pctEl = document.getElementById("cv-tailor-pct");
+    const bar = shadow.getElementById("cv-tailor-progress");
+    const pctEl = shadow.getElementById("cv-tailor-pct");
     if (bar && pctEl) {
       bar.style.width = `${pct}%`;
       pctEl.textContent = `${pct}%`;
@@ -297,4 +395,4 @@ function init() {
   });
 }
 
-init();
+if (isJobPage()) init();

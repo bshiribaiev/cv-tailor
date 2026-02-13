@@ -18,6 +18,8 @@ export type Message =
   | { type: "TEST_API_KEY"; payload: { apiKey: string; provider: "gemini" | "anthropic" } }
   | { type: "GET_STATUS" }
   | { type: "OPEN_OPTIONS" }
+  | { type: "FETCH_GREENHOUSE_JD"; payload: { board: string; jobId: string } }
+  | { type: "GREENHOUSE_JD_RESULT"; payload: { title: string; company: string; description: string } | null }
   | {
       type: "STATUS_RESULT";
       payload: {
