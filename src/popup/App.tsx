@@ -163,29 +163,29 @@ export function App() {
         </button>
       </div>
 
-      {/* Status indicators */}
-      <div class="space-y-1 mb-4 text-sm">
-        <div class="flex items-center gap-2">
-          <span class={hasResume ? "text-green-600" : "text-red-500"}>
-            {hasResume ? "\u2713" : "\u2717"}
-          </span>
-          <span>Resume {hasResume ? "loaded" : "not loaded"}</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <span class={hasApiKey ? "text-green-600" : "text-red-500"}>
-            {hasApiKey ? "\u2713" : "\u2717"}
-          </span>
-          <span>API key {hasApiKey ? "set" : "not set"}</span>
-        </div>
-        {!isReady && (
+      {/* Status indicators - only show if missing */}
+      {!isReady && (
+        <div class="space-y-1 mb-4 text-sm">
+          {!hasResume && (
+            <div class="flex items-center gap-2">
+              <span class="text-red-500">\u2717</span>
+              <span>Resume not loaded</span>
+            </div>
+          )}
+          {!hasApiKey && (
+            <div class="flex items-center gap-2">
+              <span class="text-red-500">\u2717</span>
+              <span>API key not set</span>
+            </div>
+          )}
           <button
             class="text-blue-600 text-xs underline mt-1"
             onClick={() => chrome.runtime.openOptionsPage()}
           >
             Configure in settings
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Main action */}
       {stage === "idle" && (
@@ -194,7 +194,7 @@ export function App() {
           onClick={handleExtract}
           disabled={!isReady}
         >
-          Tailor Resume to This Page
+          Tailor Resume
         </button>
       )}
 

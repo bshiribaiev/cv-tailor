@@ -13,7 +13,7 @@ function isJobPage(): boolean {
   const urlSignals = [
     "/jobs/", "/job/", "/careers/", "/career/", "/positions/", "/position/",
     "/openings/", "/opening/", "/vacancies/", "/vacancy/",
-    "/apply", "gh_jid=", "lever_jid=",
+    "/apply", "gh_jid=", "lever_jid=", "ashbyhq.com",
   ];
   if (urlSignals.some((s) => url.includes(s))) return true;
 
@@ -25,6 +25,7 @@ function isJobPage(): boolean {
     ".jobs-description-content__text",              // LinkedIn
     ".job-description", ".jobDescription",
     "#job-description", "#jobDescription",
+    '[class*="JobDescription"]',                    // Ashby (uses dynamic class names)
   ];
   if (atsSelectors.some((s) => document.querySelector(s))) return true;
 
