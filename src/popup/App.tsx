@@ -129,11 +129,15 @@ export function App() {
 
   function downloadBlob(blob: Blob, name: string) {
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = name;
-    a.click();
-    URL.revokeObjectURL(url);
+    // Use chrome.downloads API with overwrite to replace existing file
+    chrome.downloads.download({
+      url,
+      filename: name,
+      conflictAction: "overwrite", // Replaces existing file instead of adding (1), (2), etc.
+      saveAs: false, // Don't prompt user
+    }, () => {
+      URL.revokeObjectURL(url);
+    });
   }
 
   async function handleReset() {

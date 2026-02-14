@@ -322,11 +322,15 @@ function init() {
       blob = new Blob([content], { type: "text/plain" });
     }
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = payload.filename || "resume.pdf";
-    a.click();
-    URL.revokeObjectURL(url);
+    // Use chrome.downloads API with overwrite to replace existing file
+    chrome.downloads.download({
+      url,
+      filename: payload.filename || "resume.pdf",
+      conflictAction: "overwrite", // Replaces existing file instead of adding (1), (2), etc.
+      saveAs: false, // Don't prompt user
+    }, () => {
+      URL.revokeObjectURL(url);
+    });
   }
 
   function handleProgress(stage: string, pct: number) {
