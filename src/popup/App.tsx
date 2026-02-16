@@ -1,4 +1,4 @@
-import { useState, useEffect } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import type { Message } from "../shared/messages";
 import { getTailoringState, clearTailoringState } from "../shared/storage";
 import { extractJobDescription } from "../content/extractor";
@@ -16,6 +16,7 @@ export function App() {
   const [filename, setFilename] = useState("resume.tex");
   const [error, setError] = useState<string | null>(null);
   const [jobDescription, setJobDescription] = useState<string | null>(null);
+  const tabIdRef = useRef<number | null>(null);
 
   useEffect(() => {
     // Check status
@@ -26,39 +27,46 @@ export function App() {
       }
     });
 
-    // Check for in-progress state
-    getTailoringState().then((state) => {
-      if (state) {
-        if (state.pdfBase64 || state.texBase64) {
-          setStage("done");
-          setPdfBase64(state.pdfBase64 ?? null);
-          setTexBase64(state.texBase64 ?? null);
-          setFilename(state.filename ?? "resume.tex");
-          setProgress(100);
-        } else if (state.error) {
-          setStage("error");
-          setError(state.error);
-        } else {
-          setStage("tailoring");
-          setProgress(state.pct);
-          setStatusText(state.stage);
+    // Get active tab ID then check for in-progress state
+    chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      const tid = tab?.id;
+      if (!tid) return;
+      tabIdRef.current = tid;
+
+      getTailoringState(tid).then((state) => {
+        if (state) {
+          if (state.pdfBase64 || state.texBase64) {
+            setStage("done");
+            setPdfBase64(state.pdfBase64 ?? null);
+            setTexBase64(state.texBase64 ?? null);
+            setFilename(state.filename ?? "resume.tex");
+            setProgress(100);
+          } else if (state.error) {
+            setStage("error");
+            setError(state.error);
+          } else {
+            setStage("tailoring");
+            setProgress(state.pct);
+            setStatusText(state.stage);
+          }
         }
-      }
+      });
     });
 
-    // Listen for progress
+    // Listen for progress — only for our tab
     const listener = (message: Message) => {
-      if (message.type === "TAILORING_PROGRESS") {
+      const tid = tabIdRef.current;
+      if (message.type === "TAILORING_PROGRESS" && message.payload.tabId === tid) {
         setStage("tailoring");
         setProgress(message.payload.pct);
         setStatusText(message.payload.stage);
-      } else if (message.type === "TAILORING_COMPLETE") {
+      } else if (message.type === "TAILORING_COMPLETE" && message.payload.tabId === tid) {
         setStage("done");
         setPdfBase64(message.payload.pdfBase64 ?? null);
         setTexBase64(message.payload.texBase64 ?? null);
         setFilename(message.payload.filename);
         setProgress(100);
-      } else if (message.type === "TAILORING_ERROR") {
+      } else if (message.type === "TAILORING_ERROR" && message.payload.tabId === tid) {
         setStage("error");
         setError(message.payload.error);
       }
@@ -79,6 +87,7 @@ export function App() {
         setError("No active tab found");
         return;
       }
+      tabIdRef.current = tab.id;
 
       const results = await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -129,19 +138,19 @@ export function App() {
 
   function downloadBlob(blob: Blob, name: string) {
     const url = URL.createObjectURL(blob);
-    // Use chrome.downloads API with overwrite to replace existing file
     chrome.downloads.download({
       url,
       filename: name,
-      conflictAction: "overwrite", // Replaces existing file instead of adding (1), (2), etc.
-      saveAs: false, // Don't prompt user
+      conflictAction: "overwrite",
+      saveAs: false,
     }, () => {
       URL.revokeObjectURL(url);
     });
   }
 
   async function handleReset() {
-    await clearTailoringState();
+    const tid = tabIdRef.current;
+    if (tid) await clearTailoringState(tid);
     setStage("idle");
     setPdfBase64(null);
     setTexBase64(null);

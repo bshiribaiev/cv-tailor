@@ -107,36 +107,29 @@ export async function saveCustomInstructions(value: string): Promise<void> {
   await chrome.storage.local.set({ [KEYS.customInstructions]: (value ?? "").trim() });
 }
 
-export async function saveTailoringState(state: {
+export type TailoringState = {
   stage: string;
   pct: number;
   pdfBase64?: string;
   texBase64?: string;
   filename?: string;
   error?: string;
-}): Promise<void> {
-  await chrome.storage.session.set({ tailoring_state: state });
+};
+
+function tailoringKey(tabId: number): string {
+  return `tailoring_state_${tabId}`;
 }
 
-export async function getTailoringState(): Promise<{
-  stage: string;
-  pct: number;
-  pdfBase64?: string;
-  texBase64?: string;
-  filename?: string;
-  error?: string;
-} | null> {
-  const result = await chrome.storage.session.get("tailoring_state");
-  return (result.tailoring_state as {
-    stage: string;
-    pct: number;
-    pdfBase64?: string;
-    texBase64?: string;
-    filename?: string;
-    error?: string;
-  }) ?? null;
+export async function saveTailoringState(tabId: number, state: TailoringState): Promise<void> {
+  await chrome.storage.session.set({ [tailoringKey(tabId)]: state });
 }
 
-export async function clearTailoringState(): Promise<void> {
-  await chrome.storage.session.remove("tailoring_state");
+export async function getTailoringState(tabId: number): Promise<TailoringState | null> {
+  const key = tailoringKey(tabId);
+  const result = await chrome.storage.session.get(key);
+  return (result[key] as TailoringState) ?? null;
+}
+
+export async function clearTailoringState(tabId: number): Promise<void> {
+  await chrome.storage.session.remove(tailoringKey(tabId));
 }

@@ -36,12 +36,27 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
     if (message.type === "START_TAILORING") {
-      const { jobDescription, jobTitle, company } = message.payload;
-      handleTailoring(jobDescription, jobTitle, company);
+      // Resolve tabId: content script has sender.tab.id, popup must query active tab
+      const resolveTab = sender.tab?.id
+        ? Promise.resolve(sender.tab.id)
+        : chrome.tabs.query({ active: true, currentWindow: true }).then(([t]) => t?.id);
+      resolveTab.then((tabId) => {
+        if (!tabId) return;
+        const { jobDescription, jobTitle, company } = message.payload;
+        handleTailoring(jobDescription, jobTitle, company, tabId);
+      });
       return false;
+    }
+    if (message.type === "GET_TAB_ID") {
+      sendResponse({ tabId: sender.tab?.id ?? null });
+      return true;
     }
     if (message.type === "OPEN_OPTIONS") {
       chrome.runtime.openOptionsPage();
+      return false;
+    }
+    if (message.type === "DOWNLOAD_FILE") {
+      handleDownload(message.payload);
       return false;
     }
     if (message.type === "FETCH_GREENHOUSE_JD") {
@@ -50,6 +65,21 @@ chrome.runtime.onMessage.addListener(
     }
   },
 );
+
+function handleDownload(payload: { pdfBase64?: string; texBase64?: string; filename: string }) {
+  let dataUrl: string;
+  if (payload.pdfBase64) {
+    dataUrl = `data:application/pdf;base64,${payload.pdfBase64}`;
+  } else {
+    dataUrl = `data:text/plain;base64,${payload.texBase64}`;
+  }
+  chrome.downloads.download({
+    url: dataUrl,
+    filename: payload.filename || "resume.pdf",
+    conflictAction: "overwrite",
+    saveAs: false,
+  });
+}
 
 async function fetchGreenhouseJD(board: string, jobId: string) {
   try {
@@ -196,9 +226,14 @@ async function compileTex(tex: string): Promise<ArrayBuffer | null> {
   }
 }
 
-async function handleTailoring(jobDescription: string, jobTitle: string, company: string) {
+async function handleTailoring(jobDescription: string, jobTitle: string, company: string, tabId: number) {
+  async function progress(stage: string, pct: number) {
+    await saveTailoringState(tabId, { stage, pct });
+    broadcast(tabId, { type: "TAILORING_PROGRESS", payload: { tabId, stage, pct } });
+  }
+
   try {
-    await clearTailoringState();
+    await clearTailoringState(tabId);
     await progress("Preparing...", 10);
 
     const resumeData = await getResume();
@@ -392,15 +427,15 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
       const pdfBase64 = btoa(binary);
       const filename = `${baseName}.pdf`;
 
-      await saveTailoringState({
+      await saveTailoringState(tabId, {
         stage: "done",
         pct: 100,
         pdfBase64,
         filename,
       });
-      broadcast({
+      broadcast(tabId, {
         type: "TAILORING_COMPLETE",
-        payload: { pdfBase64, filename },
+        payload: { tabId, pdfBase64, filename },
       });
     } else {
       // Fallback: offer .tex download
@@ -408,37 +443,28 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
       const filename = `${baseName}.tex`;
       const texBase64 = btoa(unescape(encodeURIComponent(modifiedTex)));
 
-      await saveTailoringState({
+      await saveTailoringState(tabId, {
         stage: "done",
         pct: 100,
         texBase64,
         filename,
       });
-      broadcast({
+      broadcast(tabId, {
         type: "TAILORING_COMPLETE",
-        payload: { texBase64, filename },
+        payload: { tabId, texBase64, filename },
       });
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    await saveTailoringState({ stage: "error", pct: 0, error });
-    broadcast({ type: "TAILORING_ERROR", payload: { error } });
+    await saveTailoringState(tabId, { stage: "error", pct: 0, error });
+    broadcast(tabId, { type: "TAILORING_ERROR", payload: { tabId, error } });
   }
 }
 
-async function broadcast(message: Message) {
+async function broadcast(tabId: number, message: Message) {
   // Extension pages (popup, options)
   chrome.runtime.sendMessage(message).catch(() => {});
-  // Content scripts (floating button)
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) {
-      chrome.tabs.sendMessage(tab.id, message).catch(() => {});
-    }
-  } catch {}
+  // Content script on the originating tab
+  chrome.tabs.sendMessage(tabId, message).catch(() => {});
 }
 
-async function progress(stage: string, pct: number) {
-  await saveTailoringState({ stage, pct });
-  broadcast({ type: "TAILORING_PROGRESS", payload: { stage, pct } });
-}

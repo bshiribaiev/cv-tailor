@@ -56,6 +56,7 @@ function findGreenhouseBoardToken(): string | null {
 }
 
 // Internal state
+let myTabId: number | null = null;
 let currentState: "idle" | "extracting" | "tailoring" | "done" | "error" = "idle";
 let currentStage = "";
 let currentPct = 0;
@@ -66,6 +67,11 @@ let hasApiKey = false;
 
 function init() {
   if (document.getElementById("cv-tailor-fab")) return;
+
+  // Get our tab ID from the service worker
+  chrome.runtime.sendMessage({ type: "GET_TAB_ID" }, (res: any) => {
+    if (res?.tabId) myTabId = res.tabId;
+  });
 
   const host = document.createElement("div");
   host.id = "cv-tailor-fab";
@@ -313,23 +319,14 @@ function init() {
   }
 
   function downloadFile(payload: { pdfBase64?: string; texBase64?: string; filename: string }) {
-    let blob: Blob;
-    if (payload.pdfBase64) {
-      const bytes = Uint8Array.from(atob(payload.pdfBase64), (c) => c.charCodeAt(0));
-      blob = new Blob([bytes], { type: "application/pdf" });
-    } else {
-      const content = decodeURIComponent(escape(atob(payload.texBase64!)));
-      blob = new Blob([content], { type: "text/plain" });
-    }
-    const url = URL.createObjectURL(blob);
-    // Use chrome.downloads API with overwrite to replace existing file
-    chrome.downloads.download({
-      url,
-      filename: payload.filename || "resume.pdf",
-      conflictAction: "overwrite", // Replaces existing file instead of adding (1), (2), etc.
-      saveAs: false, // Don't prompt user
-    }, () => {
-      URL.revokeObjectURL(url);
+    // Content scripts can't use chrome.downloads — delegate to service worker
+    chrome.runtime.sendMessage({
+      type: "DOWNLOAD_FILE",
+      payload: {
+        pdfBase64: payload.pdfBase64,
+        texBase64: payload.texBase64,
+        filename: payload.filename || "resume.pdf",
+      },
     });
   }
 
@@ -370,21 +367,23 @@ function init() {
     renderBody();
   }
 
-  // Primary: runtime messages from service worker
+  // Primary: runtime messages from service worker — filtered by tabId
   chrome.runtime.onMessage.addListener((message: any) => {
-    if (message.type === "TAILORING_PROGRESS") {
+    if (message.type === "TAILORING_PROGRESS" && message.payload.tabId === myTabId) {
       handleProgress(message.payload.stage, message.payload.pct);
-    } else if (message.type === "TAILORING_COMPLETE") {
+    } else if (message.type === "TAILORING_COMPLETE" && message.payload.tabId === myTabId) {
       handleComplete(message.payload);
-    } else if (message.type === "TAILORING_ERROR") {
+    } else if (message.type === "TAILORING_ERROR" && message.payload.tabId === myTabId) {
       handleError(message.payload.error);
     }
   });
 
-  // Fallback: storage changes
+  // Fallback: storage changes — only react to our tab's key
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "session" || !changes.tailoring_state) return;
-    const state = changes.tailoring_state.newValue as {
+    if (areaName !== "session" || !myTabId) return;
+    const key = `tailoring_state_${myTabId}`;
+    if (!changes[key]) return;
+    const state = changes[key].newValue as {
       stage: string; pct: number;
       pdfBase64?: string; texBase64?: string; filename?: string; error?: string;
     } | undefined;
