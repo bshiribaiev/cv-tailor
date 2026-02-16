@@ -4,7 +4,9 @@ Chrome extension that tailors your LaTeX resume to job postings using AI. Browse
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue?logo=googlechrome&logoColor=white)
 ![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)
-![Gemini API](https://img.shields.io/badge/Gemini-API-orange?logo=google&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Preact](https://img.shields.io/badge/Preact-673AB8?logo=preact&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
 
 ## How It Works
 
@@ -13,7 +15,7 @@ Chrome extension that tailors your LaTeX resume to job postings using AI. Browse
 3. **Click** the floating "Tailor Resume" button or open the extension popup
 4. **Download** a tailored PDF with experience bullets reworded to match the job description
 
-The extension extracts the job description from the page, sends your experience bullets to Gemini to incorporate relevant keywords, replaces the bullets in your raw `.tex` source, and compiles to PDF via an online LaTeX compiler — preserving your exact formatting, fonts, and layout.
+The extension extracts the job description from the page, sends your experience bullets to an LLM (Gemini or Claude) to incorporate relevant keywords, replaces the bullets in your raw `.tex` source, and compiles to PDF via an online LaTeX compiler — preserving your exact formatting, fonts, and layout.
 
 ## What Gets Tailored
 
@@ -28,7 +30,7 @@ The extension extracts the job description from the page, sends your experience 
 - **Floating button** auto-appears on supported job sites
 - **Exact LaTeX output** — modifies `.tex` source directly, compiles with real LaTeX
 - **Smart bullet formatting** — bullets fit cleanly on one or two lines, never dangling
-- **Multiple Gemini models** — configurable (2.5 Flash, 2.5 Pro, 3 Flash, 2.5 Flash Lite)
+- **Multiple LLM providers** — Gemini (2.5 Flash, 2.5 Pro) or Claude (Haiku, Sonnet)
 - **Works offline-first** — resume and API key stored locally in Chrome
 
 ## Supported Job Sites
@@ -48,7 +50,7 @@ The popup works on **any page** — it extracts job descriptions using smart DOM
 ### Prerequisites
 
 - Google Chrome
-- [Gemini API key](https://aistudio.google.com/apikey) (free tier available)
+- [Gemini API key](https://aistudio.google.com/apikey) (free tier) or [Anthropic API key](https://console.anthropic.com/)
 - A `.tex` resume ([RenderCV](https://rendercv.com) template supported)
 
 ### Install
@@ -69,7 +71,7 @@ Then load the extension:
 ### Configure
 
 1. Click the extension icon → **Settings**
-2. Enter your Gemini API key and click **Save & Test**
+2. Enter your Gemini or Claude API key and click **Save & Test**
 3. Upload your `.tex` file (or paste the content)
 4. Click **Save Resume**
 
@@ -81,7 +83,7 @@ src/
   options/        Settings page
   background/
     service-worker.ts   Orchestration: extract → LLM → .tex replace → compile
-    gemini.ts           Gemini API integration
+    llm.ts              LLM API integration (Gemini + Claude)
   content/
     extractor.ts        Job description extraction
     floating-button.ts  Auto-injected button on job sites
@@ -93,13 +95,13 @@ src/
     messages.ts         Message type definitions
 ```
 
-**Pipeline:** Extract JD → Tailor bullets via Gemini → String-replace `\item` lines in `.tex` → Compile PDF via [latex.ytotech.com](https://latex.ytotech.com) → Download
+**Pipeline:** Extract JD → Tailor bullets via LLM → String-replace `\item` lines in `.tex` → Compile PDF via [latex.ytotech.com](https://latex.ytotech.com) → Download
 
 ## Tech Stack
 
 - **Preact** + **Tailwind CSS** — lightweight UI
 - **Vite** + **CRXJS** — Chrome extension build tooling
-- **Gemini API** — raw fetch, JSON response mode
+- **Gemini / Claude API** — raw fetch, JSON response mode
 - **latex.ytotech.com** — online LaTeX → PDF compilation
 - **TypeScript** throughout
 
