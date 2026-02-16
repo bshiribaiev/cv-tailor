@@ -3,7 +3,6 @@
 Chrome extension that tailors your LaTeX resume to job postings using AI. Browse a job listing, click the button, and get a tailored PDF — matching your exact LaTeX formatting.
 
 ![Chrome Extension](https://img.shields.io/badge/Chrome-Extension-blue?logo=googlechrome&logoColor=white)
-![Manifest V3](https://img.shields.io/badge/Manifest-V3-green)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Preact](https://img.shields.io/badge/Preact-673AB8?logo=preact&logoColor=white)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white)
