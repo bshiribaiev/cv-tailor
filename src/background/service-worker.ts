@@ -413,6 +413,11 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
     }
 
     const baseName = `${resume.name.replace(/\s+/g, "_")}_resume`;
+    // Sanitize company for use as a folder name (strip illegal chars, collapse whitespace)
+    const companyFolder = company
+      .replace(/[<>:"/\\|?*]/g, "")
+      .replace(/\s+/g, " ")
+      .trim() || "Unknown";
 
     await progress("Compiling PDF...", 80);
 
@@ -425,7 +430,7 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
         binary += String.fromCharCode(bytes[i]);
       }
       const pdfBase64 = btoa(binary);
-      const filename = `${baseName}.pdf`;
+      const filename = `${companyFolder}/${baseName}.pdf`;
 
       await saveTailoringState(tabId, {
         stage: "done",
@@ -440,7 +445,7 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
     } else {
       // Fallback: offer .tex download
       console.log("[CV Tailor] PDF compilation unavailable, offering .tex");
-      const filename = `${baseName}.tex`;
+      const filename = `${companyFolder}/${baseName}.tex`;
       const texBase64 = btoa(unescape(encodeURIComponent(modifiedTex)));
 
       await saveTailoringState(tabId, {

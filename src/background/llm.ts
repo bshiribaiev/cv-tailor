@@ -188,8 +188,8 @@ BULLET STRUCTURE (Google XYZ format — follow for EVERY bullet):
 - Examples: "Reduced system latency from 300ms to 100ms by implementing load balancing and caching on Linux" (X=reduced latency, Y=300ms to 100ms, Z=load balancing and caching on Linux)
 
 WRITING QUALITY RULES (critical):
-- NEVER use em dashes (—) or en dashes (–). Use regular hyphens (-) or commas instead. Em dashes signal LLM-generated text.
-- NEVER repeat the same sentence structure or connective pattern across bullets. E.g., if one bullet ends with "- saving X", don't end another with "- saved Y".
+- ABSOLUTELY NO EM DASHES (—) OR EN DASHES (–) ANYWHERE. Not in the middle of a sentence, not at the end, not as separators. Use commas, semicolons, "which", "resulting in", or restructure the sentence. This is a ZERO TOLERANCE rule — any em dash in output = automatic rejection. Check EVERY bullet for the characters — and – before returning.
+- WITHIN EACH JOB ENTRY (group of 3 bullets), every bullet must have a DIFFERENT sentence structure and ending pattern. If one bullet ends with a result clause ("reducing X by Y%"), the next must NOT end with a similar pattern ("saving Z hours"). Vary: some end with metrics, some with tools, some with outcomes. Mix short declarative endings with longer qualifying clauses.
 - NEVER repeat the same adjective or filler word across bullets
 - Use a UNIQUE action verb for each bullet. NEVER repeat the same leading verb across bullets. Rotate through: built, engineered, developed, implemented, designed, automated, optimized, deployed, integrated, delivered, architected, streamlined, established, reduced, migrated, created, accelerated. If you've used "built" once, do NOT use it again.
 - PRESERVE specific technical details that the hiring manager would care about (deployment targets, infrastructure, metrics). Drop tech names irrelevant to the JD domain — specificity matters only when it's relevant specificity.
@@ -576,7 +576,8 @@ The tailored bullet must describe the SAME WORK at the SAME COMPLEXITY. A search
 RULES:
 - If a bullet uses JD domain vocabulary AND has no issues above, return it EXACTLY as-is
 - Keep all real metrics/numbers from originals intact
-- NEVER use em dashes or en dashes
+- ABSOLUTELY NO EM DASHES (—) OR EN DASHES (–) ANYWHERE. Use commas, semicolons, or restructure. Check every bullet for — and – characters before returning.
+- Within each job entry (3 bullets), vary sentence structure and ending patterns. No two bullets should end with similar result clauses ("saving X", "reducing Y").
 - Only use tech from the JD or the candidate's skills section — no injected tech from nowhere
 - Output must follow length rules strictly: 90-105 or 180-210 chars per bullet
 
