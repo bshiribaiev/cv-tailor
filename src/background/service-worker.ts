@@ -9,8 +9,8 @@ import {
   getTailorSkills,
   getCustomInstructions,
 } from "../shared/storage";
-import { tailorBullets, tailorSkills, shortenBullets, expandBullets, refineBullets, testApiKey } from "./llm";
-import type { TailoredBullet, TailoredSkills } from "./llm";
+import { tailorBullets, tailorSkills, testApiKey } from "./llm";
+import type { TailoredSkills } from "./llm";
 
 // Allow content scripts to access session storage (for floating button progress)
 chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" });
@@ -110,6 +110,25 @@ async function handleGetStatus() {
     type: "STATUS_RESULT" as const,
     payload: { hasResume: !!resume, hasApiKey: !!apiKey },
   };
+}
+
+/** Truncate bullet at last comma/semicolon before 105 chars if in dead zone (106-179) */
+function fixBulletLength(text: string): string {
+  const len = text.length;
+  if (len <= 105 || len >= 180) return text;
+
+  // Dead zone: try to cut at last comma or semicolon before char 105
+  const slice = text.slice(0, 105);
+  const lastCut = Math.max(slice.lastIndexOf(","), slice.lastIndexOf(";"));
+  if (lastCut >= 60) {
+    const truncated = text.slice(0, lastCut).trimEnd();
+    console.log(`[CV Tailor] Truncated bullet from ${len} to ${truncated.length} chars`);
+    return truncated;
+  }
+
+  // No good cut point — keep as-is (ugly wrap but still tailored)
+  console.log(`[CV Tailor] Bullet in dead zone (${len} chars), no clean cut point`);
+  return text;
 }
 
 /** Escape special LaTeX characters in plain text */
@@ -274,128 +293,22 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
       company,
     );
 
-    // Fill in any missing tailoredText with originals
+    // Fill in missing, fix bad lengths
     const origMap = new Map(expBullets.map((b) => [b.id, b.originalText]));
     for (const b of tailoredBullets) {
       if (!b.tailoredText) {
         console.log(`[CV Tailor] Missing tailoredText for ${b.id}, using original`);
         b.tailoredText = origMap.get(b.id) ?? "";
+        continue;
       }
-    }
-
-    // Refinement pass: fix domain mismatches, length issues, keyword gaps
-    await progress("Refining bullets...", 40);
-    try {
-      const refined = await refineBullets(
-        jobDescription,
-        expBullets,
-        tailoredBullets,
-        candidateSkills,
-        customInstructions,
-        jobTitle,
-        company,
-      );
-      const refinedMap = new Map(refined.map((b) => [b.id, b.tailoredText]));
-      for (const b of tailoredBullets) {
-        const r = refinedMap.get(b.id);
-        if (r) b.tailoredText = r;
-      }
-    } catch (err) {
-      console.log("[CV Tailor] refineBullets failed, using first-pass results:", err);
-    }
-
-    // Post-process: only enforce max length (210 chars = 2 lines)
-    const MAX_BULLET_LEN = 210;
-    const tooLong = tailoredBullets.filter((b) => b.tailoredText.length > MAX_BULLET_LEN);
-
-    if (tooLong.length > 0) {
-      console.log(`[CV Tailor] ${tooLong.length} bullets over ${MAX_BULLET_LEN} chars, requesting shorter versions`);
-      await progress("Shortening long bullets...", 45);
-      try {
-        const shortened = await shortenBullets(tooLong, MAX_BULLET_LEN);
-        const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
-        for (const b of tailoredBullets) {
-          const short = shortenedMap.get(b.id);
-          if (short && short.length <= MAX_BULLET_LEN) {
-            b.tailoredText = short;
-          } else if (b.tailoredText.length > MAX_BULLET_LEN) {
-            const orig = origMap.get(b.id);
-            if (orig) {
-              console.log(`[CV Tailor] Reverted bullet ${b.id}: still ${b.tailoredText.length} chars after retry`);
-              b.tailoredText = orig;
-            }
-          }
-        }
-      } catch (err) {
-        console.log("[CV Tailor] shortenBullets failed, reverting long bullets:", err);
-        for (const b of tooLong) {
-          const orig = origMap.get(b.id);
-          if (orig) b.tailoredText = orig;
-        }
-      }
-    }
-
-    // Post-process: fix dead-zone bullets (106-179 chars cause ugly wrapping)
-    const DEAD_ZONE_MIN = 106;
-    const DEAD_ZONE_MAX = 179;
-    const deadZone = tailoredBullets.filter(
-      (b) => b.tailoredText.length >= DEAD_ZONE_MIN && b.tailoredText.length <= DEAD_ZONE_MAX,
-    );
-
-    if (deadZone.length > 0) {
-      console.log(`[CV Tailor] ${deadZone.length} bullets in dead zone (${DEAD_ZONE_MIN}-${DEAD_ZONE_MAX} chars), shortening to ≤105`);
-      await progress("Fixing line wrapping...", 50);
-      try {
-        const shortened = await shortenBullets(deadZone, 105);
-        const shortenedMap = new Map(shortened.map((b) => [b.id, b.tailoredText]));
-        // Collect bullets still in dead zone after shortening attempt
-        const stillDead: TailoredBullet[] = [];
-        for (const b of tailoredBullets) {
-          const short = shortenedMap.get(b.id);
-          if (short && short.length <= 105) {
-            b.tailoredText = short;
-          } else if (short && short.length >= DEAD_ZONE_MIN && short.length <= DEAD_ZONE_MAX) {
-            // Still in dead zone — keep tailored content, try expanding to 2 lines
-            stillDead.push({ id: b.id, tailoredText: short });
-          }
-        }
-        // Second pass: expand dead-zone survivors to 180-210 chars (2 lines) instead of reverting
-        if (stillDead.length > 0) {
-          console.log(`[CV Tailor] ${stillDead.length} bullets still in dead zone, expanding to 2 lines`);
-          try {
-            const expanded = await expandBullets(stillDead, 180, MAX_BULLET_LEN);
-            const expandedMap = new Map(expanded.map((b) => [b.id, b.tailoredText]));
-            for (const b of tailoredBullets) {
-              const exp = expandedMap.get(b.id);
-              if (exp && (exp.length <= 105 || (exp.length >= 180 && exp.length <= MAX_BULLET_LEN))) {
-                b.tailoredText = exp;
-              } else if (exp && exp.length >= DEAD_ZONE_MIN && exp.length <= DEAD_ZONE_MAX) {
-                // Still stuck — revert as last resort
-                const orig = origMap.get(b.id);
-                if (orig) {
-                  console.log(`[CV Tailor] Reverted dead-zone bullet ${b.id}: ${exp.length} chars after expand`);
-                  b.tailoredText = orig;
-                }
-              }
-            }
-          } catch (err) {
-            console.log("[CV Tailor] dead-zone expand failed, reverting:", err);
-            for (const b of stillDead) {
-              const orig = origMap.get(b.id);
-              if (orig) b.tailoredText = orig;
-            }
-          }
-        }
-      } catch (err) {
-        console.log("[CV Tailor] dead-zone shortenBullets failed:", err);
-      }
+      b.tailoredText = fixBulletLength(b.tailoredText);
     }
 
     const tailoredMap = new Map(
       tailoredBullets.map((b) => [b.id, b.tailoredText]),
     );
 
-    await progress("Updating resume...", 55);
+    await progress("Updating resume...", 50);
 
     let modifiedTex = replaceBulletsInTex(rawTex, expBullets, tailoredMap);
 
@@ -403,7 +316,7 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
     const tailorSkillsEnabled = await getTailorSkills();
     const skillsSection = resume.sections.find((s) => s.type === "skills");
     if (tailorSkillsEnabled && skillsSection?.entries[0]?.skillLines) {
-      await progress("Tailoring skills...", 65);
+      await progress("Tailoring skills...", 60);
       const tailoredSkills = await tailorSkills(
         jobDescription,
         skillsSection.entries[0].skillLines,
@@ -413,11 +326,15 @@ async function handleTailoring(jobDescription: string, jobTitle: string, company
     }
 
     const baseName = `${resume.name.replace(/\s+/g, "_")}_resume`;
-    // Sanitize company for use as a folder name (strip illegal chars, collapse whitespace)
-    const companyFolder = company
-      .replace(/[<>:"/\\|?*]/g, "")
-      .replace(/\s+/g, " ")
-      .trim() || "Unknown";
+    // Sanitize for folder name (strip illegal chars, collapse whitespace)
+    const sanitize = (s: string) => s.replace(/[<>:"/\\|?*]/g, "").replace(/\s+/g, " ").trim();
+    const companyClean = sanitize(company) || "Unknown";
+    const titleClean = sanitize(jobTitle);
+    // Short hash to avoid collisions when company/title are identical
+    const hash = Array.from(jobDescription.slice(0, 200)).reduce((h, c) => ((h << 5) - h + c.charCodeAt(0)) | 0, 0).toString(36).slice(-4);
+    const companyFolder = titleClean
+      ? `${companyClean} - ${titleClean}`
+      : `${companyClean} (${hash})`;
 
     await progress("Compiling PDF...", 80);
 

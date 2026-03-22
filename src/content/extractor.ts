@@ -82,9 +82,29 @@ export function extractJobDescription(): JobInfo {
       const titleEl = document.querySelector<HTMLElement>(
         '[data-automation-id="jobPostingHeader"]',
       );
+      // Workday URLs often contain company subdomain: <company>.wd1.myworkdayjobs.com
+      const wdCompany = host.split(".")[0].replace(/-/g, " ");
       return {
         title: titleEl?.textContent?.trim() ?? "",
-        company: "",
+        company: wdCompany !== "www" ? wdCompany : "",
+        description: descEl.innerText.trim(),
+      };
+    }
+  }
+
+  // Ashby
+  if (host.includes("ashbyhq.com") || document.querySelector('[class*="JobDescription"]')) {
+    const descEl =
+      document.querySelector<HTMLElement>('[class*="JobDescription"]') ??
+      document.querySelector<HTMLElement>('[class*="jobDescription"]');
+    if (descEl) {
+      const titleEl = document.querySelector<HTMLElement>("h1");
+      // Ashby URLs: jobs.ashbyhq.com/<company>/...
+      const ashbyMatch = window.location.pathname.match(/^\/([^/]+)/);
+      const ashbyCompany = ashbyMatch?.[1]?.replace(/-/g, " ") ?? "";
+      return {
+        title: titleEl?.textContent?.trim() ?? "",
+        company: ashbyCompany,
         description: descEl.innerText.trim(),
       };
     }
@@ -131,9 +151,24 @@ export function extractJobDescription(): JobInfo {
   }
 
   const h1 = document.querySelector<HTMLElement>("h1");
+
+  // Try to extract company from common patterns
+  let company = "";
+  // "Company - Job Title" or "Job Title | Company" in document.title
+  const titleParts = document.title.split(/\s+[-|–—]\s+/);
+  if (titleParts.length >= 2) {
+    // Usually the shorter part is the company name
+    company = titleParts.reduce((a, b) => a.length < b.length ? a : b).trim();
+  }
+  // OG meta tag
+  if (!company) {
+    const ogSite = document.querySelector<HTMLMetaElement>('meta[property="og:site_name"]');
+    if (ogSite?.content) company = ogSite.content.trim();
+  }
+
   return {
     title: h1?.textContent?.trim() ?? document.title,
-    company: "",
+    company,
     description: best?.innerText?.trim() ?? document.body.innerText.slice(0, 5000),
   };
 }
